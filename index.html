@@ -384,6 +384,23 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
         <div class="ab-title">Ритуал</div>
         <div class="ab-sub">Якорь, безопасность, предсказуемость</div>
       </div>
+      <div class="arch-btn" onclick="toggleArchDetail('regime')">
+        <div class="ab-ico">📅</div>
+        <div class="ab-title">Правила режима</div>
+        <div class="ab-sub">Как выстроить стабильный режим</div>
+      </div>
+    </div>
+
+    <!-- Памятка: Правила режима -->
+    <div class="arch-detail" id="arch-regime">
+      <h3>📅 Правила выстраивания режима</h3>
+      <div class="arch-formula" style="font-size:12px;font-weight:500">Режим — это не расписание по часам.<br>Это предсказуемая цепочка событий: малыш знает что будет дальше → чувствует безопасность.</div>
+      <div class="arch-step"><div class="as-num">1</div><div><b>Начинаем с дневника сна 3–5 дней</b><br>Записываем время подъёма, каждый сон, настроение. Ищем закономерности: в какое время малыш чаще просыпается бодрым? Какое ВБ даёт спокойное укладывание?</div></div>
+      <div class="arch-step"><div class="as-num">2</div><div><b>Фиксируем время подъёма</b><br>Стабильный подъём — фундамент режима. Наблюдаем 3–5 дней, находим среднее. Мягко помогаем просыпаться в это время (открываем шторы).</div></div>
+      <div class="arch-step"><div class="as-num">3</div><div><b>С 4–5 мес — фиксируем 1-й и 2-й сон</b><br>1-й сон: 9:00–10:00. 2-й сон: 12:00–14:00. 3-й сон — не фиксируем, управляем через уход в ночь.</div></div>
+      <div class="arch-step"><div class="as-num">4</div><div><b>Нагрузки — в первую половину дня</b><br>Врачи, прививки, гости, ТЦ, бассейн — до обеда. Вечером нервная система не справляется с новыми впечатлениями.</div></div>
+      <div class="arch-step"><div class="as-num">5</div><div><b>Уход в ночь — не позже 21:00</b><br>Ценность часов до полуночи выше. Правило 12 часов: от подъёма до ночи не менее 12 ч. Ночь — минимум 10 ч.</div></div>
+      <div class="notice tip" style="margin-top:9px;font-size:11.5px">💬 Нужен персональный режим? Спроси у Сонни во вкладке «Консультант» — скажи возраст малыша и время подъёма.</div>
     </div>
 
     <!-- Памятка: Формула сна -->
@@ -476,6 +493,7 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
       <h2>Нормы сна</h2>
       <table class="normtable" id="normtab"></table>
       <div class="notice tip" style="margin-top:8px;font-size:11.5px">📌 ВБ — максимум после снов >1 ч. После коротких (<60 мин) — ВБ сокращается на 5–15%. До 3 мес — всё ВБ спокойно.</div>
+      <div class="notice info" style="margin-top:6px;font-size:11.5px">🔄 Сонни считает по нормам таблицы. После 3 дней данных — по фактическому ВБ вашего малыша. Нормы — ориентир, не цель.</div>
     </div>
   </div>
 
@@ -842,10 +860,17 @@ function endSleep(ts){
 }
 function setMorning(ts){
   const t=todayDayLogs();
-  const firstSleep=t.length?t[0].start:(sleeping?sleeping.start:null);
+  const firstSleep=t.length?t[0].start:(sleeping&&!isCurrentNight()?sleeping.start:null);
   if(firstSleep&&ts>firstSleep){
-    document.getElementById('time-lbl').textContent='⚠️ Подъём должен быть до '+fmtT(firstSleep);
+    document.getElementById('time-lbl').textContent='⚠️ Подъём должен быть до '+fmtT(firstSleep)+' — раньше первого сна';
     document.getElementById('time-input').style.borderColor='var(--rose)';return;
+  }
+  // Подъём не может быть в будущем
+  if(ts>Date.now()){ts=Date.now();}
+  // Автоподъём: если получается раньше 4:00 — поправляем
+  const h=new Date(ts).getHours();
+  if(h<4&&!profile?.autoMorning===false){
+    // Оставляем как есть — ранний подъём возможен
   }
   if(profile)profile.autoMorning=false;saveProfile();
   morningWake=ts;saveData();renderAll();
@@ -1047,11 +1072,28 @@ function renderState(){
   }else{
     card.className='state';lbl.textContent='Бодрствование';
     const w=nextWindow();
+    const t2=todayDayLogs();
+    // Источник данных: таблица или фактические (после 6+ снов в базе)
+    const hasEnoughData=logs.filter(l=>l.end&&!isNightSleep(l)).length>=6;
+    const dataSrc=hasEnoughData?'по вашему малышу':'по нормам таблицы';
     if(w){
-      const nl=w.isNight?'уход в ночь':'следующий сон';
-      hint.innerHTML='СБ с <b>'+fmtT(w.calm)+'</b>, ритуал в <b>'+fmtT(w.ritual)+'</b>.<br>ВБ — <b>максимум</b>, лучше уложить раньше.';
-      wins.innerHTML='<div class="wp"><div class="wt">Окно — '+nl+'</div><div class="wv">'+fmtT(w.putdown)+'</div></div>'+
+      const refTs=t2.length?t2[t2.length-1].end:morningWake;
+      const nowMin=(Date.now()-refTs)/60000;
+      const remaining=Math.round(Math.max(0,w.wb-nowMin));
+      const isUrgent=remaining<=15&&remaining>0;
+      const isPast=remaining===0;
+      hint.innerHTML=
+        '🌿 СБ с <b>'+fmtT(w.calm)+'</b> &nbsp;·&nbsp; 🕯️ Ритуал в <b>'+fmtT(w.ritual)+'</b><br>'+
+        '🌙 Укладывание в <b>'+fmtT(w.putdown)+'</b>'+
+        (isPast?' <span style="color:var(--star);font-weight:600">← пора!</span>':
+          isUrgent?' <span style="color:var(--star)">(через '+remaining+' мин)</span>':
+          ' (через '+remaining+' мин)')+
+        '<br><span style="font-size:11px;opacity:.65">Сонни считает '+dataSrc+'</span>';
+      wins.innerHTML=
+        '<div class="wp"><div class="wt">Укладывание</div><div class="wv">'+fmtT(w.putdown)+'</div></div>'+
         '<div class="wp"><div class="wt">Макс. ВБ</div><div class="wv">'+fmtClock(w.wb)+'</div></div>';
+    }else if(morningWake){
+      hint.textContent='Нажмите кнопку когда малыш засыпает.';
     }
     wrap.innerHTML='<button class="btn btn-s" onclick="askTime(\'sleep\')">🌙 Малыш уснул</button>';
   }
@@ -1234,8 +1276,15 @@ function renderHistory(){
     dayLogs.forEach((l,i)=>{
       const dur=(l.end-l.start)/60000;
       const fe=l.moodFall?FE[l.moodFall]:'',we=l.moodWake?WE[l.moodWake]:'';
-      const wbBefore=i===0&&wakeForDay?(l.start-wakeForDay)/60000:i>0?(l.start-dayLogs[i-1].end)/60000:0;
-      if(wbBefore>2)html+='<div class="hist-wb">⏱ ВБ '+fmtDur(wbBefore)+'</div>';
+      // ВБ перед этим сном
+      let wbBefore=0;
+      if(i===0&&wakeForDay)wbBefore=(l.start-wakeForDay)/60000;
+      else if(i>0)wbBefore=(l.start-dayLogs[i-1].end)/60000;
+      if(wbBefore>2){
+        const wbOk=wbBefore<=norm().wb[1]*1.1;
+        html+='<div class="hist-wb" style="color:'+(wbOk?'var(--muted)':'var(--rose)')+'">'+
+          '⏱ ВБ '+fmtDur(Math.max(0,wbBefore))+'</div>';
+      }
       html+='<div class="hist-item"><div class="ficon fi-d" style="width:28px;height:28px;font-size:14px;flex-shrink:0">🌙</div>'+
         '<div class="fmain"><div class="ft">'+(i+1)+'-й сон · '+fmtDur(dur)+
         (dur<60?' <span class="tag warn">кор.</span>':'')+' '+fe+we+'</div>'+
@@ -1245,6 +1294,11 @@ function renderHistory(){
         (l.wbComment?'<div class="fcmt">💬 '+l.wbComment+'</div>':'')+
         '</div><span class="edit-link" onclick="editLog('+l.id+')">✏️</span></div>';
     });
+    // ВБ после последнего сна (только сегодня)
+    if(d===0&&dayLogs.length>0&&!sleeping){
+      const wbAfter=(Date.now()-dayLogs[dayLogs.length-1].end)/60000;
+      if(wbAfter>2)html+='<div class="hist-wb">⏱ Текущее ВБ '+fmtDur(wbAfter)+'</div>';
+    }
     html+='</div>';
   }
   content.innerHTML=html||'<div class="sub">Нет данных за последние 7 дней</div>';
@@ -1310,7 +1364,9 @@ async function exportHistory(){
     });
   }
   const n=norm();
-  const wb=XLSX.utils.book_new();
+  const wb_xl=XLSX.utils.book_new();
+  // Переименуем wb → wb_xl чтобы не конфликтовало
+  const wb=wb_xl;
 
   // ── Лист 1: Дневник снов ──
   const hdr=[
@@ -1399,7 +1455,8 @@ async function exportHistory(){
   ];
   XLSX.utils.book_append_sheet(wb,ws2,'Сводка по дням');
 
-  XLSX.writeFile(wb,'sonny_дневник.xlsx');
+  // Сохраняем с правильными настройками
+  XLSX.writeFile(wb_xl,'sonny_дневник.xlsx',{bookType:'xlsx',type:'binary'});
 }
 
 /* ══ ПЛАН ══ */
@@ -1444,7 +1501,12 @@ function renderPlan(){
     html+='<div class="plan-row"><div class="plan-time">'+fmtT(r.t)+'</div><div class="plan-bar '+cls+'"></div><div class="plan-lab">'+r.lab+'</div></div>';
   });
   if(plan.warn12)html+='<div class="notice info" style="margin-top:7px">⚠️ Ночь сдвинута — нужно ≥12 ч от подъёма.</div>';
-  if(plan.isNewborn)html+='<div class="notice tip" style="margin-top:7px">👶 До 4 мес — ритмичный режим. Ориентируйтесь на признаки усталости.</div>';
+  if(plan.isNewborn){
+    const a2=ageMonths();
+    if(a2<=2)html+='<div class="notice tip" style="margin-top:7px">👶 0–3 мес — ритмичный режим. Подъём не фиксируем. Ориентируемся на признаки усталости, не на часы.</div>';
+    else if(a2===3)html+='<div class="notice tip" style="margin-top:7px">👶 3 мес — переходный период. Начинаем замечать закономерности. Ведите дневник 5 дней.</div>';
+    else html+='<div class="notice tip" style="margin-top:7px">👶 4 мес — обычно 4 сна. После регресса переходим к фиксированному режиму по биоритмам.</div>';
+  }
   document.getElementById('planlist').innerHTML=html;
 
   const wT=fmtClock(n.wb[0])+(n.wb[1]>n.wb[0]?' – '+fmtClock(n.wb[1]):'');
@@ -1468,7 +1530,7 @@ function makeStars(){
 }
 function toggleHow(){const t=document.getElementById('how-t'),b=document.getElementById('how-b');t.classList.toggle('open');b.classList.toggle('show');}
 function toggleArchDetail(id){
-  const ids=['formula','ritual','signals'];
+  const ids=['formula','ritual','signals','regime'];
   ids.forEach(k=>{
     const el=document.getElementById('arch-'+k);
     if(el){
@@ -1579,7 +1641,19 @@ function confirmTime(){
   const[h,m]=v.split(':').map(Number);const d=new Date();d.setHours(h,m,0,0);let ts=d.getTime();
   if(timeCtx==='sleep'&&ts>Date.now())ts-=86400000;
   if(timeCtx==='wake'&&sleeping&&ts<sleeping.start)ts+=86400000;
-  if(timeCtx==='morning'&&profile)profile.autoMorning=false;
+  // П.7: Валидация подъёма — не закрываем модалку если подъём > первого сна
+  if(timeCtx==='morning'){
+    const t=todayDayLogs();
+    const firstSleep=t.length?t[0].start:(sleeping&&!isCurrentNight()?sleeping.start:null);
+    if(firstSleep&&ts>firstSleep){
+      document.getElementById('time-lbl').textContent='⚠️ Подъём должен быть до '+fmtT(firstSleep);
+      document.getElementById('time-input').style.borderColor='var(--rose)';
+      return; // не закрываем
+    }
+    document.getElementById('time-input').style.borderColor='';
+    document.getElementById('time-lbl').textContent='Проверьте — можно поправить';
+    if(profile)profile.autoMorning=false;
+  }
   document.getElementById('timeOv').classList.remove('show');
   if(timeCtx==='morning')setMorning(ts);
   else if(timeCtx==='sleep')startSleep(ts);
