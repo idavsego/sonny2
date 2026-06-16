@@ -179,15 +179,29 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
 .chatbar input:focus{border-color:var(--accent)}
 .sendbtn{width:44px;height:44px;border-radius:13px;border:none;background:var(--accent);color:#fff;font-size:18px;cursor:pointer;flex-shrink:0}
 /* ONBOARD */
-.onboard{position:absolute;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column;justify-content:center;padding:26px;text-align:center;overflow-y:auto}
-.onboard .mb{font-size:58px;margin-bottom:9px}
-.onboard h1{font-family:'Comfortaa';font-size:24px;margin-bottom:7px}
-.onboard p{color:var(--muted);font-size:13.5px;line-height:1.6;margin-bottom:20px}
+.onboard{position:absolute;inset:0;background:var(--night);z-index:60;display:flex;flex-direction:column;overflow-y:auto}
+.ob-screen{min-height:100%;display:flex;flex-direction:column;justify-content:center;padding:28px 24px;text-align:center}
+.ob-screen.form-screen{background:var(--bg);text-align:left}
+.onboard .mb{font-size:62px;margin-bottom:12px;display:block}
+.onboard h1{font-family:'Comfortaa';font-size:26px;margin-bottom:8px;color:#fff}
+.onboard .ob-sub{color:#9D94C6;font-size:14px;line-height:1.65;margin-bottom:28px}
 .onboard .field{text-align:left}
+/* Карточки преимуществ */
+.ob-cards{display:flex;flex-direction:column;gap:10px;margin-bottom:28px;text-align:left}
+.ob-card{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:flex-start}
+.ob-card-ico{font-size:22px;flex-shrink:0;margin-top:1px}
+.ob-card-title{font-size:13.5px;font-weight:600;color:#fff;margin-bottom:3px}
+.ob-card-text{font-size:12px;color:#9D94C6;line-height:1.5}
+/* Форма */
+.form-screen h2{font-family:'Comfortaa';font-size:20px;margin-bottom:5px;color:var(--ink)}
+.form-screen .form-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.ob-stars{position:fixed;top:0;left:0;right:0;height:60%;pointer-events:none;overflow:hidden;z-index:61}
+.ob-stars i{position:absolute;border-radius:50%;background:#fff;animation:tw 3s ease-in-out infinite}
 .preterm-q{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
 .ptb{flex:1;min-width:85px;border:2px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer;background:var(--bg);font-size:12.5px;font-family:'Rubik';color:var(--ink);transition:all .15s}
 .ptb.sel{border-color:var(--accent);background:var(--as);font-weight:600}
 .hidden{display:none!important}
+.ob-stars i{animation:tw 3s ease-in-out infinite}
 /* HOW */
 .how-wrap{margin-bottom:11px}
 .how-toggle{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;cursor:pointer;box-shadow:var(--sh);font-size:12.5px;font-weight:500;color:var(--ink)}
@@ -229,25 +243,69 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
 
 <!-- ОНБОРДИНГ -->
 <div class="onboard" id="onboard">
-  <div class="mb">🌙</div>
-  <h1>Сонни</h1>
-  <p>Умный помощник по сну малыша 0–3 лет.<br>Трекер, режим и консультант 24/7.</p>
-  <div class="field"><label>Как зовут малыша?</label><input id="ob-name" placeholder="Например, Мия" maxlength="20"></div>
-  <div class="field"><label>Дата рождения</label><input id="ob-bd" type="date" onchange="onBdChange()"></div>
-  <div class="field hidden" id="ob-term-wrap">
-    <label>Малыш родился в срок?</label>
-    <div class="preterm-q">
-      <div class="ptb sel" id="btn-term-yes" onclick="setTerm('yes')">✅ В срок</div>
-      <div class="ptb" id="btn-term-early" onclick="setTerm('early')">Раньше срока</div>
-      <div class="ptb" id="btn-term-late" onclick="setTerm('late')">Позже срока</div>
+
+  <!-- Звёздочки для первого экрана -->
+  <div class="ob-stars" id="ob-stars"></div>
+
+  <!-- ЭКРАН 1: Приветствие -->
+  <div class="ob-screen" id="ob-welcome">
+    <span class="mb">🌙</span>
+    <h1>Сонни</h1>
+    <p class="ob-sub">Ваш личный консультант по сну малыша.<br>Не просто трекер — Сонни анализирует <b style="color:#C9C2E6">именно вашего малыша</b> и говорит что делать.</p>
+
+    <div class="ob-cards">
+      <div class="ob-card">
+        <div class="ob-card-ico">📊</div>
+        <div>
+          <div class="ob-card-title">Анализирует фактический сон</div>
+          <div class="ob-card-text">Нажали кнопку — Сонни видит данные и говорит что именно делать завтра. Не «обычно», а конкретное время для вашего малыша.</div>
+        </div>
+      </div>
+      <div class="ob-card">
+        <div class="ob-card-ico">🧠</div>
+        <div>
+          <div class="ob-card-title">Чем отличается от ChatGPT</div>
+          <div class="ob-card-text">ChatGPT не знает что ваш малыш сегодня капризил при укладывании и проснулся через 40 минут. Сонни — знает.</div>
+        </div>
+      </div>
+      <div class="ob-card">
+        <div class="ob-card-ico">💰</div>
+        <div>
+          <div class="ob-card-title">Замена консультации по сну</div>
+          <div class="ob-card-text">Консультация стоит от 5 000 ₽ разово. Сонни — 990 ₽ в месяц без ограничений. Методика Марии Романовой.</div>
+        </div>
+      </div>
     </div>
+
+    <button class="btn btn-m" onclick="showObForm()" style="background:var(--accent);box-shadow:0 8px 24px rgba(240,146,110,.4)">
+      Начать — это бесплатно 🌙
+    </button>
+    <p style="font-size:12px;color:#6B6480;margin-top:12px">Данные хранятся только на вашем устройстве</p>
   </div>
-  <div class="field hidden" id="ob-due-wrap">
-    <label id="ob-due-lbl">Предполагаемая дата родов (ПДР)</label>
-    <div class="sub" style="margin-bottom:6px">Для расчёта скорректированного возраста</div>
-    <input id="ob-due" type="date">
+
+  <!-- ЭКРАН 2: Форма -->
+  <div class="ob-screen form-screen hidden" id="ob-form">
+    <h2>Расскажите о малыше</h2>
+    <p class="form-sub">Сонни рассчитает нормы ВБ и план дня под конкретный возраст</p>
+    <div class="field"><label>Как зовут малыша?</label><input id="ob-name" placeholder="Например, Мия" maxlength="20"></div>
+    <div class="field"><label>Дата рождения</label><input id="ob-bd" type="date" onchange="onBdChange()"></div>
+    <div class="field hidden" id="ob-term-wrap">
+      <label>Малыш родился в срок?</label>
+      <div class="preterm-q">
+        <div class="ptb sel" id="btn-term-yes" onclick="setTerm('yes')">✅ В срок</div>
+        <div class="ptb" id="btn-term-early" onclick="setTerm('early')">Раньше срока</div>
+        <div class="ptb" id="btn-term-late" onclick="setTerm('late')">Позже срока</div>
+      </div>
+    </div>
+    <div class="field hidden" id="ob-due-wrap">
+      <label id="ob-due-lbl">Предполагаемая дата родов (ПДР)</label>
+      <div class="sub" style="margin-bottom:6px">Для расчёта скорректированного возраста</div>
+      <input id="ob-due" type="date">
+    </div>
+    <button class="btn btn-m" onclick="finishOnboard()" style="margin-top:8px">Открыть Сонни →</button>
+    <button class="btn btn-g" onclick="showObWelcome()">← Назад</button>
   </div>
-  <button class="btn btn-m" onclick="finishOnboard()">Начать 🌙</button>
+
 </div>
 
 <!-- ШАПКА -->
@@ -312,19 +370,19 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
     <!-- Кнопки-памятки архитектуры -->
     <div class="arch-btn-row">
       <div class="arch-btn" onclick="toggleArchDetail('formula')">
-        <div class="ab-ico">🏗️</div>
+        <div class="ab-ico">✨</div>
         <div class="ab-title">Формула сна</div>
-        <div class="ab-sub">АБ → СБ → Ритуал → Укладывание</div>
-      </div>
-      <div class="arch-btn" onclick="toggleArchDetail('ritual')">
-        <div class="ab-ico">🕯️</div>
-        <div class="ab-title">Как сделать ритуал</div>
-        <div class="ab-sub">Безопасность и предсказуемость</div>
+        <div class="ab-sub">АБ + СБ + Ритуал = спокойное засыпание</div>
       </div>
       <div class="arch-btn" onclick="toggleArchDetail('signals')">
         <div class="ab-ico">🔍</div>
         <div class="ab-title">Признаки усталости</div>
-        <div class="ab-sub">Как поймать окно в сон</div>
+        <div class="ab-sub">Ранние и поздние, окно в сон</div>
+      </div>
+      <div class="arch-btn" onclick="toggleArchDetail('ritual')">
+        <div class="ab-ico">🕯️</div>
+        <div class="ab-title">Ритуал</div>
+        <div class="ab-sub">Якорь, безопасность, предсказуемость</div>
       </div>
     </div>
 
@@ -364,29 +422,49 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
         <span>📋</span><h2>Архитектура по возрасту</h2><span class="arr">▼</span>
       </div>
       <div class="arch-body" id="arch-body">
-        <div class="arch-age">0–3 мес — ритмичный режим</div>
-        <div class="arch-row"><div class="arch-dot"></div><div><b>Всё ВБ — спокойно.</b> Никаких активных игр, яркого света, новых людей. Ребёнок накапливает эмоции очень быстро.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>Режим ритмичный, не фиксированный. Ориентируемся на <b>признаки усталости</b>: зевота, трение глаз, взгляд в одну точку, хныканье.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>После короткого сна (<60 мин с продлением) — ВБ сокращается, СБ усиливается.</div></div>
-        <div class="notice tip" style="margin-top:7px;font-size:11.5px">Подъём не фиксируем. ВБ нарастает от первого к последнему.</div>
 
-        <div class="arch-age">4–6 мес — переход к режиму</div>
-        <div class="arch-row"><div class="arch-dot"></div><div>Первое ВБ всегда <b>короче</b> (~15–20%) — первый сон = продолжение ночи.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>Считаем среднее время подъёма за 4–7 дней → предлагаем зафиксировать.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>За 20 мин до сна — <b>спокойное ВБ (СБ)</b>: тихие игры, нет яркого света и новых впечатлений.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>За 10–15 мин — <b>ритуал</b>: одинаковый каждый раз. Малыш начинает предсказывать сон.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>АБ/СБ = 60/40. После короткого сна (<60 мин) — следующее ВБ сокращается на 5–15%.</div></div>
+        <!-- ФОРМУЛА -->
+        <div style="background:linear-gradient(135deg,#F0EBF8,#EDE8F5);border-radius:13px;padding:13px;margin-bottom:14px;text-align:center">
+          <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:6px">Волшебная формула сна</div>
+          <div style="font-size:13px;font-weight:600;color:var(--ink);line-height:1.8">ВБ = Ритуал пробуждения + АБ + СБ<br>+ Ритуал засыпания + Укладывание</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:5px">Работает в любом возрасте · засыпание 5–20 мин</div>
+        </div>
 
-        <div class="arch-age">6–12 мес — фиксированный режим</div>
-        <div class="arch-row"><div class="arch-dot"></div><div>1-й сон: 9:00–10:00. 2-й сон: 12:00–14:00. 3-й сон — не фиксируем, управляем уходом в ночь.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>Уход в ночь <b>не позже 21:00</b>. Ночь минимум 10 ч. Ценность часов до полуночи выше.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>Нагрузки (врачи, гости, бассейн, папа) — <b>первая половина дня</b>.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>Признаки усталости с 5–6 мес могут быть «ложными». Ориентируемся на ВБ и биоритмы.</div></div>
+        <div class="arch-age">☀️ Ритуал пробуждения (1–5 мин)</div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Позитивные, спокойные действия сразу после пробуждения. Помогает малышу понять — это день, пора бодрствовать.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Открыть шторы, поцеловать, достать из кроватки, лёгкая гимнастика. Всегда одинаковая последовательность.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div><b>Ночью ритуал НЕ делаем</b> — малыш понимает что нужно спать дальше.</div></div>
 
-        <div class="arch-age">12+ мес — 1 сон и переходы</div>
-        <div class="arch-row"><div class="arch-dot"></div><div>На 1 сне: длина >2 ч (до 3). ВБ до и после примерно равное.</div></div>
-        <div class="arch-row"><div class="arch-dot"></div><div>Переход: чередование дней → сокращение последнего сна → тихий час.</div></div>
-        <div class="notice alert" style="margin-top:7px;font-size:11.5px">⚠️ Нормы — максимум после снов >1 ч. Ищем комфортное ВБ малыша, не натягиваем на таблицу.</div>
+        <div class="arch-age">🏃 Активное бодрствование (АБ) — 60% ВБ</div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Три составляющие: <b>физическая</b> (выкладывание, ползание, ходьба), <b>эмоциональная</b> (общение, новые впечатления), <b>интеллектуальная</b> (новые игрушки, тактильные ощущения).</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Сильные нагрузки (врач, прививка, гости, ТЦ) — в <b>первую половину</b> АБ. Чаще меняйте вид деятельности — малыши теряют интерес за 1–2 минуты.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Телевизор даже фоном — колоссальная нагрузка на нервную систему. Исключить до 1–2 лет.</div></div>
+
+        <div class="arch-age">🌿 Спокойное бодрствование (СБ) — 30–40% ВБ</div>
+        <div class="arch-row"><div class="arch-dot"></div><div><b>Качество и длина СБ напрямую влияют на качество и длину сна.</b> Отправная точка: минимум 40–50 мин для любого возраста.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Перейти в комнату для сна, приглушить свет, убрать яркие игрушки и гаджеты, говорить спокойным низким голосом.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div><b>Адресное внимание</b> — безраздельно включены в малыша. Если его не хватает, малыш «требует» его перед сном → длинные укладывания.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Папа пришёл с работы — весёлые игры и «полёты» только в АБ. Иначе мама потом не уложит.</div></div>
+        <div class="notice tip" style="margin-top:7px;font-size:11.5px">Одно действие может быть и АБ, и СБ. Книжку читать по ролям с чувством — АБ. Читать монотонно, низким голосом — СБ.</div>
+
+        <div class="arch-age">🔍 Признаки усталости — окно в сон (5–15 мин)</div>
+        <div class="arch-row"><div class="arch-dot"></div><div><b>Ранние (укладываем сейчас):</b> зевота, трение глаз, «залипание» — взгляд в одну точку, малыш становится медленным, теребит ушко.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div><b>Поздние (уже перегулял!):</b> дёрганые движения, беспричинный плач, тянет уши, открылось «второе дыхание».</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>После 4–5 мес признаки могут быть <b>ложными</b> — зевнул от скуки. Если по признаку уложили, а капризы → этот признак не ваш. Переходим на укладывание по времени ВБ.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Пропустили окно → не укладываем из истерики. Сначала успокаиваем (другая комната, водичка, белый шум), потом пробуем снова.</div></div>
+        <div class="notice info" style="margin-top:7px;font-size:11.5px">✅ Попали в окно — засыпание 5–15 мин, просыпается в хорошем настроении.</div>
+
+        <div class="arch-age">🕯️ Ритуал засыпания (5–15 мин)</div>
+        <div class="arch-row"><div class="arch-dot"></div><div><b>Незыблем</b> — одинаковый перед каждым сном, кто бы не укладывал. Говорит малышу: «Сейчас будет сон» — это безопасность.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Пример: подошли к окну — «пока-пока» → белый шум → одна книжка. Всё, ритуал конечен. Ритуал ≠ укладывание.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Якорь при скачках, болезни, переездах. Стабильность помогает малышу успокоиться в любой ситуации.</div></div>
+
+        <div class="arch-age">⏱️ Правила ВБ</div>
+        <div class="arch-row"><div class="arch-dot"></div><div><b>Первое ВБ</b> всегда короче. Если среднее ВБ 2 ч — утром может быть 1 ч 20 мин.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>После <b>короткого сна</b> (&lt;60 мин) — следующее ВБ сокращается на 15–20 мин.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>В течение дня ВБ нарастает. Сокращаем при: насыщенный день, болезнь, скачок развития, переезд.</div></div>
+        <div class="arch-row"><div class="arch-dot"></div><div>Сон в движении (коляска, машина) после 4 мес — менее восстановительный. После него ВБ может быть короче.</div></div>
+        <div class="notice alert" style="margin-top:7px;font-size:11.5px">⚠️ Пока укладывание >20 мин с капризами — сначала налаживаем архитектуру. Потом меняем привычки и режим.</div>
       </div>
     </div>
 
@@ -619,14 +697,17 @@ let selNwCnt=null, selNwWalk=null, timeCtx=null;
 let editingLogId=null;
 let eodFeedback={}; // {date: 'yes'|'no'}
 
-/* ══ ХРАНИЛИЩЕ ══ */
+/* ══ ХРАНИЛИЩЕ (localStorage — работает в браузере и Telegram Mini App) ══ */
+const LS={
+  get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}},
+};
 async function loadAll(){
-  try{const p=await window.storage.get('sonny:profile');profile=JSON.parse(p.value);}catch(e){profile=null;}
+  try{profile=LS.get('sonny:profile');}catch(e){profile=null;}
   try{
-    const d=await window.storage.get('sonny:data8');const o=JSON.parse(d.value);
+    const o=LS.get('sonny:data8')||{};
     logs=o.logs||[];sleeping=o.sleeping||null;morningWake=o.morningWake||null;
     nightData=o.nightData||null;eodFeedback=o.eodFeedback||{};
-    const today=todayStr();
     if(morningWake&&!isToday(morningWake))morningWake=null;
     if(sleeping&&!isToday(sleeping.start))sleeping=null;
     if(nightData&&!isToday(nightData.ts))nightData=null;
@@ -637,9 +718,9 @@ async function loadAll(){
   }catch(e){}
 }
 async function saveData(){
-  try{await window.storage.set('sonny:data8',JSON.stringify({logs,sleeping,morningWake,nightData,eodFeedback}));}catch(e){}
+  try{LS.set('sonny:data8',{logs,sleeping,morningWake,nightData,eodFeedback});}catch(e){}
 }
-async function saveProfile(){try{await window.storage.set('sonny:profile',JSON.stringify(profile));}catch(e){}}
+async function saveProfile(){try{LS.set('sonny:profile',profile);}catch(e){}}
 
 /* ══ УТИЛИТЫ ══ */
 const pad=n=>String(n).padStart(2,'0');
@@ -681,6 +762,26 @@ function getNightForDate(dstr){
 }
 
 /* ══ ОНБОРДИНГ ══ */
+function showObWelcome(){
+  document.getElementById('ob-welcome').classList.remove('hidden');
+  document.getElementById('ob-form').classList.add('hidden');
+  document.getElementById('ob-stars').style.display='block';
+}
+function showObForm(){
+  document.getElementById('ob-welcome').classList.add('hidden');
+  document.getElementById('ob-form').classList.remove('hidden');
+  document.getElementById('ob-stars').style.display='none';
+  // Инициализируем звёздочки если ещё нет
+  const box=document.getElementById('ob-stars');
+  if(!box.children.length){
+    for(let i=0;i<40;i++){
+      const s=document.createElement('i');
+      const size=1+Math.random()*2.5;
+      s.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;width:${size}px;height:${size}px;animation-delay:${Math.random()*3}s;animation-duration:${2+Math.random()*3}s;opacity:0`;
+      box.appendChild(s);
+    }
+  }
+}
 let termChoice='yes';
 function onBdChange(){
   const bd=document.getElementById('ob-bd').value;if(!bd)return;
@@ -1538,7 +1639,11 @@ function buildPrompt(){
 - Первое ВБ всегда короче (~15–20%). ВБ нарастает к вечеру.
 - До 3 мес — всё ВБ спокойно, режим ритмичный, подъём не фиксируем.
 - С 4 мес: считаем среднее подъёма за 4–7 дней → фиксируем. Сны по биоритмам.
-- АБ/СБ = 60/40. За 20 мин — СБ, за 10–15 мин — ритуал.
+- ФОРМУЛА СНА: ВБ = Ритуал пробуждения + АБ (60%) + СБ (30-40%) + Ритуал засыпания + Укладывание.
+- АБ: физическая + эмоциональная + интеллектуальная нагрузка. Сильные нагрузки — в первую половину АБ.
+- СБ: минимум 40-50 мин, приглушить свет, убрать гаджеты, низкий голос, адресное внимание.
+- Ритуал: незыблем, одинаковый, 5-15 мин, конечен. Ритуал ≠ укладывание.
+- Ритуал пробуждения: только днём, помогает малышу понять — это день. Ночью не делаем.
 - Последнее ВБ перед ночью = среднее ВБ +10–15%.
 - Ночное гуляние >30 мин = ВБ. Правило 12 ч: ночь не раньше 12 ч от подъёма. Ночь до 21:00.
 - Коррекция: один отрезок ВБ за раз, не более 20–30 мин изменений.
@@ -1583,7 +1688,21 @@ async function sendChat(){
   document.getElementById('chatlog').scrollTop=1e9;
 }
 
-(async function init(){await loadAll();if(profile)document.getElementById('onboard').classList.add('hidden');renderAll();})();
+(async function init(){
+  // Звёзды на экране приветствия
+  const box=document.getElementById('ob-stars');
+  if(box){
+    for(let i=0;i<40;i++){
+      const s=document.createElement('i');
+      const size=1+Math.random()*2.5;
+      s.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;width:${size}px;height:${size}px;animation-delay:${Math.random()*3}s;animation-duration:${2+Math.random()*3}s;opacity:0`;
+      box.appendChild(s);
+    }
+  }
+  await loadAll();
+  if(profile)document.getElementById('onboard').classList.add('hidden');
+  renderAll();
+})();
 </script>
 </body>
 </html>
