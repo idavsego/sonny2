@@ -493,7 +493,7 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
       <h2>Нормы сна</h2>
       <table class="normtable" id="normtab"></table>
       <div class="notice tip" style="margin-top:8px;font-size:11.5px">📌 ВБ — максимум после снов >1 ч. После коротких (<60 мин) — ВБ сокращается на 5–15%. До 3 мес — всё ВБ спокойно.</div>
-      <div class="notice info" style="margin-top:6px;font-size:11.5px">🔄 Сонни считает по нормам таблицы. После 3 дней данных — по фактическому ВБ вашего малыша. Нормы — ориентир, не цель.</div>
+      <div class="notice info" style="margin-top:6px;font-size:11.5px">🔄 Сонни считает по нормам таблицы, пока данных мало. Когда накопится 4+ снов с хорошим засыпанием за последние 5 дней — переходит на фактическое ВБ именно вашего малыша (медиана по первому/среднему/последнему снам). Нормы — ориентир, не цель.</div>
     </div>
   </div>
 
@@ -672,23 +672,273 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
 </div>
 
 <script>
+/* ══ ВСТРОЕННЫЙ XLSX-ГЕНЕРАТОР (без внешних зависимостей) ══ */
+/* Минимальный генератор XLSX без зависимостей.
+   Создаёт валидный .xlsx (ZIP + XML по спецификации OOXML). */
+
+// ---------- CRC32 ----------
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c;
+  }
+  return t;
+})();
+function crc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// ---------- ZIP (store method, no compression) ----------
+function strToBytes(str) {
+  return new TextEncoder().encode(str);
+}
+function u16(n) { return [n & 0xFF, (n >> 8) & 0xFF]; }
+function u32(n) { return [n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, (n >> 24) & 0xFF]; }
+
+function dosDateTime(date) {
+  const d = date || new Date();
+  const dosTime = ((d.getHours() & 0x1F) << 11) | ((d.getMinutes() & 0x3F) << 5) | ((d.getSeconds() >> 1) & 0x1F);
+  const dosDate = (((d.getFullYear() - 1980) & 0x7F) << 9) | (((d.getMonth() + 1) & 0xF) << 5) | (d.getDate() & 0x1F);
+  return { dosTime, dosDate };
+}
+
+function makeZip(files) {
+  // files: [{name, content (Uint8Array or string)}]
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const { dosTime, dosDate } = dosDateTime();
+
+  for (const f of files) {
+    const nameBytes = strToBytes(f.name);
+    const content = typeof f.content === 'string' ? strToBytes(f.content) : f.content;
+    const crc = crc32(content);
+    const size = content.length;
+
+    // Local file header
+    const localHeader = [
+      ...u32(0x04034b50), // signature
+      ...u16(20),         // version needed
+      ...u16(0),          // flags
+      ...u16(0),          // compression: 0 = store
+      ...u16(dosTime), ...u16(dosDate),
+      ...u32(crc),
+      ...u32(size), ...u32(size), // compressed size, uncompressed size
+      ...u16(nameBytes.length),
+      ...u16(0), // extra field length
+    ];
+    const localPart = new Uint8Array(localHeader.length + nameBytes.length + content.length);
+    localPart.set(localHeader, 0);
+    localPart.set(nameBytes, localHeader.length);
+    localPart.set(content, localHeader.length + nameBytes.length);
+    localParts.push(localPart);
+
+    // Central directory header
+    const centralHeader = [
+      ...u32(0x02014b50),
+      ...u16(20), ...u16(20),
+      ...u16(0), ...u16(0),
+      ...u16(dosTime), ...u16(dosDate),
+      ...u32(crc),
+      ...u32(size), ...u32(size),
+      ...u16(nameBytes.length),
+      ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(0),
+      ...u32(offset),
+    ];
+    const centralPart = new Uint8Array(centralHeader.length + nameBytes.length);
+    centralPart.set(centralHeader, 0);
+    centralPart.set(nameBytes, centralHeader.length);
+    centralParts.push(centralPart);
+
+    offset += localPart.length;
+  }
+
+  const centralStart = offset;
+  let centralSize = 0;
+  for (const c of centralParts) centralSize += c.length;
+
+  const eocd = [
+    ...u32(0x06054b50),
+    ...u16(0), ...u16(0),
+    ...u16(files.length), ...u16(files.length),
+    ...u32(centralSize),
+    ...u32(centralStart),
+    ...u16(0),
+  ];
+
+  const totalSize = offset + centralSize + eocd.length;
+  const result = new Uint8Array(totalSize);
+  let pos = 0;
+  for (const p of localParts) { result.set(p, pos); pos += p.length; }
+  for (const p of centralParts) { result.set(p, pos); pos += p.length; }
+  result.set(eocd, pos);
+  return result;
+}
+
+// ---------- XLSX XML building ----------
+function xmlEscape(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function colLetter(n) {
+  // 0-indexed column number -> Excel letter (A, B, ..., Z, AA, ...)
+  let s = '';
+  n = n + 1;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+// rows: array of arrays of {v, style?} or plain values
+// styleMap: optional row-level style index per row
+function sheetXml(rows, colWidths) {
+  let rowsXml = '';
+  rows.forEach((row, ri) => {
+    const rn = ri + 1;
+    let cellsXml = '';
+    row.forEach((cell, ci) => {
+      const ref = colLetter(ci) + rn;
+      let val, styleIdx = 0;
+      if (cell && typeof cell === 'object' && 'v' in cell) {
+        val = cell.v; styleIdx = cell.s || 0;
+      } else {
+        val = cell;
+      }
+      if (val === null || val === undefined || val === '') {
+        if (styleIdx) cellsXml += `<c r="${ref}" s="${styleIdx}"/>`;
+        return;
+      }
+      const sAttr = styleIdx ? ` s="${styleIdx}"` : '';
+      if (typeof val === 'number') {
+        cellsXml += `<c r="${ref}"${sAttr}><v>${val}</v></c>`;
+      } else {
+        cellsXml += `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(val)}</t></is></c>`;
+      }
+    });
+    rowsXml += `<row r="${rn}">${cellsXml}</row>`;
+  });
+
+  let colsXml = '';
+  if (colWidths && colWidths.length) {
+    colsXml = '<cols>' + colWidths.map((w, i) =>
+      `<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`
+    ).join('') + '</cols>';
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData>${rowsXml}</sheetData>
+${colsXml}
+</worksheet>`;
+}
+
+function buildXlsx(sheets) {
+  // sheets: [{name, rows, colWidths}]
+  const files = [];
+
+  files.push({ name: '[Content_Types].xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+${sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('\n')}
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>` });
+
+  files.push({ name: '_rels/.rels', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>` });
+
+  files.push({ name: 'xl/workbook.xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>
+${sheets.map((s, i) => `<sheet name="${xmlEscape(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('\n')}
+</sheets>
+</workbook>` });
+
+  files.push({ name: 'xl/_rels/workbook.xml.rels', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${sheets.map((s, i) => `<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('\n')}
+<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>` });
+
+  files.push({ name: 'xl/styles.xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="3">
+<font><sz val="11"/><name val="Calibri"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/></font>
+<font><sz val="11"/><b/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+</fonts>
+<fills count="4">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF2B2546"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF4F2F8"/></patternFill></fill>
+</fills>
+<borders count="2">
+<border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left style="thin"><color rgb="FFE0DCF0"/></left><right style="thin"><color rgb="FFE0DCF0"/></right><top style="thin"><color rgb="FFE0DCF0"/></top><bottom style="thin"><color rgb="FFE0DCF0"/></bottom></border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="5">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+</cellXfs>
+</styleSheet>` });
+
+  sheets.forEach((s, i) => {
+    files.push({ name: `xl/worksheets/sheet${i+1}.xml`, content: sheetXml(s.rows, s.colWidths) });
+  });
+
+  return makeZip(files);
+}
+
+function downloadBytes(bytes, filename) {
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Экспорт для использования
+
+
 /* ══ НОРМЫ ══ */
+// Пороги переходов количества снов уточнены по практике консультанта:
+// Пороги переходов количества снов — по практике консультанта:
+// 3-5 мес: 4 сна | 5.5-7.5 мес: 3 сна | 8-15 мес: 2 сна | 15+ мес: 1 сон
+// naps[1] (макс) определяет план дня; naps[0] (мин) — нижняя граница переходного периода
 const NORMS=[
   {m:[0,0],lb:'до 1 мес',wb:[40,50],naps:[3,8],nl:[15,180],ds:[360,840],ns:[300,600],tot:[960,1080]},
   {m:[1,1],lb:'1 мес',wb:[50,60],naps:[4,6],nl:[40,120],ds:[420,540],ns:[480,540],tot:[900,1080]},
   {m:[2,2],lb:'2 мес',wb:[60,80],naps:[4,5],nl:[40,120],ds:[360,540],ns:[540,600],tot:[900,1020]},
-  {m:[3,3],lb:'3 мес',wb:[80,100],naps:[3,5],nl:[40,120],ds:[300,420],ns:[600,660],tot:[840,1020]},
-  {m:[4,4],lb:'4 мес',wb:[90,120],naps:[3,4],nl:[40,120],ds:[240,300],ns:[600,660],tot:[840,960]},
-  {m:[5,5],lb:'5 мес',wb:[120,135],naps:[3,3],nl:[40,120],ds:[180,300],ns:[600,720],tot:[840,960]},
-  {m:[6,6],lb:'6 мес',wb:[135,165],naps:[2,3],nl:[40,120],ds:[180,300],ns:[600,720],tot:[780,960]},
-  {m:[7,7],lb:'7 мес',wb:[150,180],naps:[2,3],nl:[60,120],ds:[180,240],ns:[600,720],tot:[780,900]},
-  {m:[8,8],lb:'8 мес',wb:[180,210],naps:[2,3],nl:[60,120],ds:[120,240],ns:[600,720],tot:[780,900]},
-  {m:[9,9],lb:'9 мес',wb:[180,225],naps:[2,3],nl:[60,120],ds:[120,240],ns:[600,720],tot:[780,840]},
-  {m:[10,10],lb:'10 мес',wb:[210,240],naps:[2,2],nl:[60,120],ds:[120,180],ns:[600,720],tot:[780,840]},
-  {m:[11,11],lb:'11 мес',wb:[240,270],naps:[2,2],nl:[60,120],ds:[120,180],ns:[600,720],tot:[780,840]},
-  {m:[12,12],lb:'12 мес',wb:[240,270],naps:[1,2],nl:[60,120],ds:[120,180],ns:[600,720],tot:[780,840]},
-  {m:[13,14],lb:'13–14 мес',wb:[240,300],naps:[1,2],nl:[60,120],ds:[120,180],ns:[600,720],tot:[780,840]},
-  {m:[15,17],lb:'15–17 мес',wb:[240,300],naps:[1,2],nl:[60,120],ds:[120,180],ns:[600,720],tot:[780,840]},
+  {m:[3,3],lb:'3 мес',wb:[80,100],naps:[4,4],nl:[40,120],ds:[280,360],ns:[600,660],tot:[840,1020]},
+  {m:[4,4],lb:'4 мес',wb:[90,120],naps:[4,4],nl:[40,120],ds:[240,320],ns:[600,660],tot:[840,960]},
+  {m:[5,5],lb:'5 мес',wb:[100,130],naps:[4,4],nl:[30,140],ds:[200,300],ns:[600,720],tot:[840,960]},
+  {m:[6,6],lb:'6 мес — переход на 3 сна',wb:[110,150],naps:[3,4],nl:[40,140],ds:[180,280],ns:[600,720],tot:[780,960]},
+  {m:[7,7],lb:'7 мес',wb:[135,165],naps:[3,3],nl:[60,140],ds:[160,260],ns:[600,720],tot:[780,900]},
+  {m:[8,8],lb:'8 мес — переход на 2 сна',wb:[150,210],naps:[2,3],nl:[60,140],ds:[120,240],ns:[600,720],tot:[780,900]},
+  {m:[9,9],lb:'9 мес',wb:[180,225],naps:[2,2],nl:[60,140],ds:[120,240],ns:[600,720],tot:[780,840]},
+  {m:[10,10],lb:'10 мес',wb:[210,240],naps:[2,2],nl:[60,140],ds:[120,180],ns:[600,720],tot:[780,840]},
+  {m:[11,11],lb:'11 мес',wb:[210,240],naps:[2,2],nl:[60,140],ds:[120,180],ns:[600,720],tot:[780,840]},
+  {m:[12,12],lb:'12 мес',wb:[240,270],naps:[2,2],nl:[60,140],ds:[120,180],ns:[600,720],tot:[780,840]},
+  {m:[13,14],lb:'13–14 мес',wb:[240,280],naps:[2,2],nl:[60,140],ds:[120,180],ns:[600,720],tot:[780,840]},
+  {m:[15,17],lb:'15 мес — переход на 1 сон',wb:[240,300],naps:[1,2],nl:[60,150],ds:[90,180],ns:[600,720],tot:[780,840]},
   {m:[18,23],lb:'18 мес',wb:[270,330],naps:[1,1],nl:[60,180],ds:[90,180],ns:[600,720],tot:[780,840]},
   {m:[24,35],lb:'2 года',wb:[300,360],naps:[1,1],nl:[60,150],ds:[90,120],ns:[600,660],tot:[720,780]},
   {m:[36,47],lb:'3 года',wb:[300,360],naps:[1,1],nl:[60,120],ds:[60,120],ns:[600,660],tot:[660,780]},
@@ -714,6 +964,11 @@ let selFall=null, selWbEnd=null, selWake=null, selPlace=null;
 let selNwCnt=null, selNwWalk=null, timeCtx=null;
 let editingLogId=null;
 let eodFeedback={}; // {date: 'yes'|'no'}
+/* calibState — опорные значения ВБ по позиции дня (first/mid/last), которые
+   складываются из табличной нормы + истории попаданий/непопаданий.
+   Это память между днями — отдельная от сырых logs.
+   Структура: {first:{anchor:мин,hits:0,misses:0,lastAdjust:мин,history:[...]},mid:{...},last:{...}} */
+let calibState=null;
 
 /* ══ ХРАНИЛИЩЕ (localStorage — работает в браузере и Telegram Mini App) ══ */
 const LS={
@@ -725,7 +980,7 @@ async function loadAll(){
   try{
     const o=LS.get('sonny:data8')||{};
     logs=o.logs||[];sleeping=o.sleeping||null;morningWake=o.morningWake||null;
-    nightData=o.nightData||null;eodFeedback=o.eodFeedback||{};
+    nightData=o.nightData||null;eodFeedback=o.eodFeedback||{};calibState=o.calibState||null;
     if(morningWake&&!isToday(morningWake))morningWake=null;
     if(sleeping&&!isToday(sleeping.start))sleeping=null;
     if(nightData&&!isToday(nightData.ts))nightData=null;
@@ -736,7 +991,7 @@ async function loadAll(){
   }catch(e){}
 }
 async function saveData(){
-  try{LS.set('sonny:data8',{logs,sleeping,morningWake,nightData,eodFeedback});}catch(e){}
+  try{LS.set('sonny:data8',{logs,sleeping,morningWake,nightData,eodFeedback,calibState});}catch(e){}
 }
 async function saveProfile(){try{LS.set('sonny:profile',profile);}catch(e){}}
 
@@ -756,9 +1011,124 @@ function ageMonths(){
   if(now.getDate()<base.getDate())m--;return Math.max(0,m);
 }
 function norm(){const a=ageMonths();return NORMS.find(n=>a>=n.m[0]&&a<=n.m[1])||NORMS[NORMS.length-2];}
-function wbMid(n){return Math.round((n.wb[0]+n.wb[1])/2);}
-function wbFirst(n){return Math.max(n.wb[0],Math.round(wbMid(n)*0.85));}
-function wbLast(n){return Math.round(wbMid(n)*1.12);}
+
+/* ══ ФАКТИЧЕСКИЙ ВБ МАЛЫША (реальный пересчёт, не косметика) ══
+   Берём отрезки ВБ за последние 5 дней из дневника. ВБ считаем для
+   ВСЕХ снов (даже после which был crying — то ВБ всё равно случилось),
+   но НЕ учитываем как образец комфортного ВБ тот отрезок, что закончился
+   протестным засыпанием (crying) — это сигнал ошибки, а не нормы.
+   Считаем медиану отдельно для первого/среднего/последнего ВБ по позиции дня.
+   Если данных мало — возвращаем null, использует табличные нормы. */
+function getFactualWB(){
+  const cutoff=Date.now()-5*24*60*60*1000;
+  const recentLogs=[...logs].filter(l=>l.end&&l.start>=cutoff&&!isNightSleep(l)).sort((a,b)=>a.start-b.start);
+  if(recentLogs.length<4)return null; // мало данных
+
+  const byDay={};
+  recentLogs.forEach(l=>{const d=dateStr(l.start);(byDay[d]=byDay[d]||[]).push(l);});
+
+  const firstWBs=[],midWBs=[],lastWBs=[];
+  Object.keys(byDay).forEach(d=>{
+    const dayLogs=byDay[d].sort((a,b)=>a.start-b.start);
+    const wake=getMorningForDate(d);
+    dayLogs.forEach((l,i)=>{
+      // ВБ считаем всегда (позиция i сохраняется верно для всех снов дня)
+      let wb=0;
+      if(i===0&&wake)wb=(l.start-wake)/60000;
+      else if(i>0)wb=(l.start-dayLogs[i-1].end)/60000;
+      if(wb<=0||wb>360)return; // отсекаем мусор/некорректные данные
+
+      // НЕ учитываем как образец нормы, если ЭТОТ сон начался с протеста —
+      // значит это ВБ привело к перегулу/недогулу, плохой пример для медианы
+      if(l.moodFall==='crying')return;
+
+      if(i===0)firstWBs.push(wb);
+      else if(i===dayLogs.length-1)lastWBs.push(wb);
+      else midWBs.push(wb);
+    });
+  });
+
+  function median(arr){
+    if(!arr.length)return null;
+    const s=[...arr].sort((a,b)=>a-b);
+    const mid=Math.floor(s.length/2);
+    return s.length%2?s[mid]:(s[mid-1]+s[mid])/2;
+  }
+
+  const mFirst=median(firstWBs),mMid=median(midWBs),mLast=median(lastWBs);
+  if(mMid===null&&mFirst===null&&mLast===null)return null;
+  return{first:mFirst,mid:mMid,last:mLast,sampleSize:recentLogs.length};
+}
+function getMorningForDate(dstr){
+  // Подъём для дня — это конец ночи, который пришёлся НА этот день (l.end matches dstr)
+  if(dstr===dateStr(Date.now())&&morningWake)return morningWake;
+  const nl=logs.find(l=>l.end&&isNightSleep(l)&&dateStr(l.end)===dstr);
+  return nl?nl.end:null;
+}
+
+/* ══ ИТОГОВЫЙ ВБ ПО ПОЗИЦИИ: приоритет calibState → факт → таблица ══
+   1) Если калибровка уже идёт (calibState существует) — берём её анкор,
+      это и есть "опорное значение + история попаданий", а не голая медиана.
+   2) Если калибровки ещё нет, но фактических данных достаточно — инициализируем
+      calibState с табличной нормы и в первый раз подмешиваем факт как ориентир.
+   3) Если данных мало совсем — чистая табличная норма. */
+function wbMid(n){
+  if(!calibState)initCalibState(n);
+  if(calibState&&calibState.mid)return calibState.mid.anchor;
+  return wbMidTable(n);
+}
+function wbFirst(n){
+  if(!calibState)initCalibState(n);
+  if(calibState&&calibState.first)return calibState.first.anchor;
+  return wbFirstTable(n);
+}
+function wbLast(n){
+  if(!calibState)initCalibState(n);
+  if(calibState&&calibState.last)return calibState.last.anchor;
+  return wbLastTable(n);
+}
+
+/* ══ УРОВЕНЬ 2 — СУТОЧНАЯ БАЛАНСИРОВКА ══
+   Берём калиброванные/табличные ВБ по позициям и проверяем: сходится ли
+   их сумма (+ суммарная длительность снов) в дневную норму сна (n.tot)?
+   Если расчётный день выходит за пределы нормы — мягко растягиваем/сжимаем
+   ВСЕ отрезки пропорционально, а не дёргаем один. Это и есть "раскидать
+   все ВБ равномерно, чтобы где-то посередине оно сошлось".
+   Возвращает: {first,mid,last,scaleApplied,reason} — скорректированные ВБ на день. */
+function getBalancedDayPlan(n){
+  const naps=n.naps[1]; // целевое количество снов (план дня)
+  const rawFirst=wbFirst(n), rawMid=wbMid(n), rawLast=wbLast(n);
+  if(naps<=1)return{first:rawFirst,mid:rawMid,last:rawLast,scaleApplied:1,reason:null};
+
+  // Считаем примерную сумму ВБ за день при текущих анкорах:
+  // 1 первое + (naps-2) средних + 1 последнее (упрощённая модель равных средних)
+  const midCount=Math.max(0,naps-2);
+  const sumWB=rawFirst+rawMid*midCount+rawLast;
+
+  // Ожидаемое суммарное время сна за день (бодрствование = сутки минус сон минус ночь)
+  // Грубая оценка: норма дневного сна из таблицы — это и есть целевой "остаток" после ВБ
+  const targetDaySleep=(n.ds[0]+n.ds[1])/2;
+  const targetNightSleep=(n.ns[0]+n.ns[1])/2;
+  const dayBudgetMin=24*60-targetNightSleep-targetDaySleep; // сколько минут в сутках остаётся на ВБ
+
+  if(dayBudgetMin<=0||sumWB<=0)return{first:rawFirst,mid:rawMid,last:rawLast,scaleApplied:1,reason:null};
+
+  const scale=dayBudgetMin/sumWB;
+  // Применяем мягкую коррекцию только если расхождение значимое (>15%),
+  // иначе не трогаем — мелкие отклонения это нормальный шум
+  if(Math.abs(scale-1)<0.15){
+    return{first:rawFirst,mid:rawMid,last:rawLast,scaleApplied:1,reason:null};
+  }
+  const clampedScale=Math.max(0.8,Math.min(1.25,scale)); // не растягиваем больше чем на 25%
+  return{
+    first:Math.round(rawFirst*clampedScale),
+    mid:Math.round(rawMid*clampedScale),
+    last:Math.round(rawLast*clampedScale),
+    scaleApplied:clampedScale,
+    reason:clampedScale<1?'Сумма ВБ за день превышала норму сна — слегка сократили':'Сумма ВБ за день была меньше нормы сна — слегка увеличили'
+  };
+}
+
 function isNightSleep(log){
   if(!log.end)return false;
   const dur=(log.end-log.start)/60000;if(dur<180)return false;
@@ -900,18 +1270,130 @@ function nextWindow(){
   const n=norm();const t=todayDayLogs();
   const lastWake=t.length?t[t.length-1].end:morningWake;if(!lastWake)return null;
   const isFirst=t.length===0,napsLeft=n.naps[0]-t.length;
+  // Уровень 2: сначала получаем сбалансированный план дня (сумма ВБ ↔ норма сна за сутки)
+  const balanced=getBalancedDayPlan(n);
   let wb;
-  if(isFirst)wb=wbFirst(n);
-  else if(napsLeft<=0)wb=wbLast(n);
-  else wb=wbMid(n);
+  if(isFirst)wb=balanced.first;
+  else if(napsLeft<=0)wb=balanced.last;
+  else wb=balanced.mid;
   // Сокращение ВБ после короткого сна < 60 мин: 5–15%
   if(!isFirst){
     const ld=(t[t.length-1].end-t[t.length-1].start)/60000;
     if(ld<60)wb=Math.round(wb*(1-Math.min(0.15,Math.max(0.05,(60-ld)/200))));
   }
   const putdown=lastWake+wb*60000;
-  return{calm:putdown-20*60000,ritual:putdown-12*60000,putdown,wb,isNight:napsLeft<=0};
+  return{calm:putdown-20*60000,ritual:putdown-12*60000,putdown,wb,isNight:napsLeft<=0,balanceNote:balanced.reason};
 }
+
+/* ══ ДИАГНОЗ ВБ ДЛЯ КАЛИБРОВКИ (источник: длина ВБ или наполнение СБ/АБ) ══
+   Возвращает: {verdict:'недогул'|'норма'|'перегул', source:'length'|'content'|null, adjustMin:число}
+   source='length'   → меняем длину ВБ (увеличить/сократить)
+   source='content'  → ВБ норм по длине, но СБ начато поздно/мало — меняем наполнение, не длину
+   Это разделение — ключевое отличие от голой статистики: не всякий перегул лечится сокращением ВБ. */
+function diagnoseNap(l, wbBeforeMin, normRange){
+  if(!l.end)return null;
+  const dur=(l.end-l.start)/60000;
+  const isShort=dur<60;
+  const mf=l.moodFall, wbEnd=l.wbEnd, fd=l.fallDuration, mw=l.moodWake;
+
+  // Помогает отличить "ВБ объективно длинное" от "ВБ нормальное, но СБ не хватило":
+  // если wbBeforeMin известно и оно НЕ превышает верхнюю границу нормы больше чем на ~10%,
+  // то даже при протесте дело вероятнее в наполнении, а не в длине.
+  // Без normRange (старые вызовы) — поведение как раньше, source='length'.
+  const wbWithinNorm=normRange&&wbBeforeMin?(wbBeforeMin<=normRange[1]*1.1):null;
+
+  // Протест/плач — сигнал перегула. Но источник зависит от того, не было ли
+  // ВБ при этом в пределах нормы — тогда дело в нехватке СБ, не в длине ВБ.
+  if(mf==='crying'){
+    if(wbWithinNorm===true){
+      return{verdict:'перегул',source:'content',adjustMin:0,confidence:'high',
+        note:'ВБ в пределах нормы, но протест — скорее всего не хватило спокойного бодрствования. Начните СБ раньше, не сокращайте ВБ.'};
+    }
+    return{verdict:'перегул',source:'length',adjustMin:-15,confidence:'high'};
+  }
+
+  // Спокойное засыпание, быстрое (<5 мин) — обычно сильный перегул, ребёнок "вырубился"
+  if(mf==='calm'&&fd&&fd<5)return{verdict:'перегул',source:'length',adjustMin:-15,confidence:'high'};
+
+  // Капризничал, но ДО сна был бодрый (не усталый, не перевозбуждённый) — недогул
+  if((mf==='fussy')&&wbEnd==='active')return{verdict:'недогул',source:'length',adjustMin:+10,confidence:'medium'};
+
+  // Спокойно уснул, но до этого капризничал — это перевозбуждение от наполнения,
+  // не от длины ВБ. ДЛИНУ НЕ МЕНЯЕМ — чиним наполнение СБ.
+  if(mf==='calm'&&wbEnd==='fussy')return{verdict:'перегул',source:'content',adjustMin:0,confidence:'medium',note:'Раньше начать СБ, снизить нагрузку в АБ'};
+
+  // Капризничал + был беспокойным/усталым до сна — перегул, но проверяем источник:
+  // если ВБ близко к норме — дело в наполнении (СБ началось поздно), не в длине
+  if(mf==='fussy'&&(wbEnd==='fussy'||wbEnd==='tired')){
+    if(wbWithinNorm===true){
+      return{verdict:'перегул',source:'content',adjustMin:0,confidence:'medium',note:'СБ началось поздно — раньше замедление, не сокращать ВБ'};
+    }
+    return{verdict:'перегул',source:'content',adjustMin:-5,confidence:'medium',note:'СБ началось поздно — раньше замедление, не сокращать ВБ резко'};
+  }
+
+  // Долгое укладывание (>35 мин) без чёткого протеста — двойственный сигнал
+  if(fd&&fd>35){
+    if(mf==='calm')return{verdict:'недогул',source:'length',adjustMin:+15,confidence:'low'};
+    return{verdict:'перегул',source:'length',adjustMin:-15,confidence:'low'};
+  }
+
+  // Спокойное засыпание 5-20 мин + хорошее пробуждение — это и есть "попали"
+  if(mf==='calm'&&fd&&fd<=20&&(mw==='happy'||mw==='neutral')){
+    return{verdict:'норма',source:null,adjustMin:0,confidence:'high'};
+  }
+
+  // Капризное пробуждение после короткого сна — перегул, но может быть и регресс
+  if(mw==='fussy'&&isShort)return{verdict:'перегул',source:'length',adjustMin:-10,confidence:'low',note:'Возможен регресс — проверить возраст'};
+
+  return null; // недостаточно данных для диагноза
+}
+
+/* ══ ОБНОВЛЕНИЕ КАЛИБРОВКИ (память между днями) ══
+   Вызывается после завершения каждого сна. Обновляет calibState[position]
+   на основе диагноза. "Попали" 2 раза подряд → закрепляем как новый якорь.
+   "Не попали" → сдвигаем в направлении adjustMin, не усредняем историю. */
+function updateCalibration(position, diagnosis, n){
+  if(!calibState)initCalibState(n);
+  const st=calibState[position];
+  if(!st)return;
+
+  st.history=st.history||[];
+  st.history.push({date:todayStr(),verdict:diagnosis?diagnosis.verdict:null,source:diagnosis?diagnosis.source:null});
+  if(st.history.length>14)st.history.shift(); // храним 2 недели
+
+  if(!diagnosis){return;} // нет диагноза — якорь не трогаем
+
+  if(diagnosis.verdict==='норма'){
+    st.hits=(st.hits||0)+1;
+    st.misses=0;
+    // 2 попадания подряд — закрепляем текущий анкор как подтверждённый
+    if(st.hits>=2)st.confirmed=true;
+  }else{
+    st.misses=(st.misses||0)+1;
+    st.hits=0;
+    // Меняем анкор ТОЛЬКО если источник проблемы — длина ВБ.
+    // Если источник — наполнение (content), длину не трогаем, ждём следующего дня
+    // с улучшенной архитектурой бодрствования.
+    if(diagnosis.source==='length'){
+      st.anchor=Math.max(20,st.anchor+diagnosis.adjustMin);
+      st.confirmed=false;
+    }
+  }
+  calibState[position]=st;
+  saveData();
+}
+
+function initCalibState(n){
+  calibState={
+    first:{anchor:wbFirstTable(n),hits:0,misses:0,confirmed:false,history:[]},
+    mid:{anchor:wbMidTable(n),hits:0,misses:0,confirmed:false,history:[]},
+    last:{anchor:wbLastTable(n),hits:0,misses:0,confirmed:false,history:[]},
+  };
+}
+// Чистые табличные функции (без обращения к факту) — нужны как стартовая точка калибровки
+function wbMidTable(n){return Math.round((n.wb[0]+n.wb[1])/2);}
+function wbFirstTable(n){return Math.max(n.wb[0],Math.round(wbMidTable(n)*0.85));}
+function wbLastTable(n){return Math.round(wbMidTable(n)*1.12);}
 
 /* ══ АЛГОРИТМ А+Б+В+Г ══ */
 function analyzeLog(l){
@@ -949,16 +1431,42 @@ function analyzeLog(l){
 }
 
 function analyzeCalib(){
-  const t=todayDayLogs().filter(l=>l.end);if(!t.length)return null;
+  const t=todayDayLogs().filter(l=>l.end&&l.type!=='night');if(!t.length)return null;
   const all=[],perNap=[];let alerts=0,oks=0;
-  t.forEach((l,i)=>{const res=analyzeLog(l);if(!res)return;perNap.push({napIdx:i+1,results:res});
-    res.forEach(r=>{all.push(r);if(r.type==='alert')alerts++;else if(r.type==='ok')oks++;});});
+  const n=norm();
+  const wake=morningWake;
+  t.forEach((l,i)=>{
+    const res=analyzeLog(l);if(!res)return;
+    perNap.push({napIdx:i+1,results:res});
+    res.forEach(r=>{all.push(r);if(r.type==='alert')alerts++;else if(r.type==='ok')oks++;});
+  });
   if(!all.length)return null;
+
+  // Считаем диагнозы с источником по каждому сну дня — для честной сводки
+  let lengthIssues=0,contentIssues=0;
+  t.forEach((l,i)=>{
+    let wbBefore=0;
+    if(i===0&&wake)wbBefore=(l.start-wake)/60000;
+    else if(i>0)wbBefore=(l.start-t[i-1].end)/60000;
+    const d=diagnoseNap(l,wbBefore,n.wb);
+    if(d&&d.verdict==='перегул'){
+      if(d.source==='length')lengthIssues++;
+      else if(d.source==='content')contentIssues++;
+    }
+  });
+
   let summary=null;
-  if(alerts>=2)summary={type:'alert',text:'⚠️ Несколько признаков перегула. Сократите ВБ на 10–15 мин на тот же отрезок завтра.'};
-  else if(oks>0&&alerts===0)summary={type:'ok',text:'✅ Сегодня всё складывается хорошо — режим работает!'};
+  if(contentIssues>=2&&contentIssues>=lengthIssues){
+    summary={type:'alert',text:'⚠️ ВБ скорее всего подходит, но наполнение бодрствования перегружено. Начинайте спокойное бодрствование раньше, не сокращайте ВБ.'};
+  }else if(lengthIssues>=2){
+    summary={type:'alert',text:'⚠️ Несколько признаков перегула. Сократите ВБ на 10–15 мин на тот же отрезок завтра.'};
+  }else if(alerts>=2){
+    summary={type:'alert',text:'⚠️ Несколько признаков перегула. Сократите ВБ на 10–15 мин на тот же отрезок завтра.'};
+  }else if(oks>0&&alerts===0){
+    summary={type:'ok',text:'✅ Сегодня всё складывается хорошо — режим работает!'};
+  }
   const transCheck=checkTransition(t,norm());
-  return{perNap,summary,transCheck,alerts,oks};
+  return{perNap,summary,transCheck,alerts,oks,lengthIssues,contentIssues};
 }
 
 function checkTransition(t,n){
@@ -1073,9 +1581,9 @@ function renderState(){
     card.className='state';lbl.textContent='Бодрствование';
     const w=nextWindow();
     const t2=todayDayLogs();
-    // Источник данных: таблица или фактические (после 6+ снов в базе)
-    const hasEnoughData=logs.filter(l=>l.end&&!isNightSleep(l)).length>=6;
-    const dataSrc=hasEnoughData?'по вашему малышу':'по нормам таблицы';
+    // Источник данных — РЕАЛЬНАЯ проверка через ту же функцию что использует расчёт
+    const factual=getFactualWB();
+    const dataSrc=factual?('по вашему малышу (по '+factual.sampleSize+' снам за 5 дн.)'):'по нормам таблицы';
     if(w){
       const refTs=t2.length?t2[t2.length-1].end:morningWake;
       const nowMin=(Date.now()-refTs)/60000;
@@ -1355,64 +1863,40 @@ function deleteLog(){
 
 /* ══ ЭКСПОРТ EXCEL ══ */
 async function exportHistory(){
-  // Загружаем SheetJS если ещё не загружен
-  if(typeof XLSX==='undefined'){
-    await new Promise((res,rej)=>{
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload=res;s.onerror=rej;document.head.appendChild(s);
-    });
-  }
   const n=norm();
-  const wb_xl=XLSX.utils.book_new();
-  // Переименуем wb → wb_xl чтобы не конфликтовало
-  const wb=wb_xl;
-
-  // ── Лист 1: Дневник снов ──
-  const hdr=[
-    'Дата','День недели','Тип сна',
-    'Начало','Конец','Длительность (мин)',
-    'Место','Укладывание (мин)','Засыпание (А)',
-    'Настроение до сна (Б)','Пробуждение (Г)','Комментарий о ВБ'
-  ];
   const DAYS=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
   const FALL_RU={calm:'Спокойно',fussy:'Капризничал',crying:'Протест/плач'};
-  const WBEND_RU={tired:'Показывал усталость',fussy:'Капризный',active:'Бодрый'};
+  const WBEND_RU={tired:'Усталость',fussy:'Капризный',active:'Бодрый'};
   const WAKE_RU={happy:'Весёлый',neutral:'Нейтрально',fussy:'Капризный'};
-  const PLACE_RU_EX={crib:'Кроватка',cosleep:'Совместный сон',arms:'На руках',breast:'На груди',self:'Сам',stroller:'Коляска'};
+  const PLACE_RU_EX={crib:'Кроватка',cosleep:'Совм. сон',arms:'Руки',breast:'Грудь',self:'Сам',stroller:'Коляска'};
 
+  // ── ЛИСТ 1: Дневник по снам (подробно) ──
+  const hdr1=['Дата','День','Тип','Начало','Конец','Длительность','Место',
+    'Укладывание мин','Засыпание (А)','Настроение до сна (Б)','Пробуждение (Г)','Комментарий'];
   const sorted=[...logs].filter(l=>l.end).sort((a,b)=>a.start-b.start);
-  const dataRows=sorted.map(l=>{
+  const rows1=[hdr1.map(h=>({v:h,s:1}))];
+  sorted.forEach(l=>{
     const d=new Date(l.start);
     const dur=Math.round((l.end-l.start)/60000);
-    return [
-      dateStr(l.start), DAYS[d.getDay()],
-      isNightSleep(l)?'Ночной':'Дневной',
-      fmtT(l.start), fmtT(l.end), dur,
-      l.place?(PLACE_RU_EX[l.place]||''):'',
-      l.fallDuration||'',
-      l.moodFall?(FALL_RU[l.moodFall]||''):'',
-      l.wbEnd?(WBEND_RU[l.wbEnd]||''):'',
-      l.moodWake?(WAKE_RU[l.moodWake]||''):'',
-      l.wbComment||''
-    ];
+    rows1.push([
+      {v:dateStr(l.start),s:2},{v:DAYS[d.getDay()],s:2},
+      {v:isNightSleep(l)?'Ночной':'Дневной',s:2},
+      {v:fmtT(l.start),s:2},{v:fmtT(l.end),s:2},{v:fmtDur(dur),s:2},
+      {v:l.place?(PLACE_RU_EX[l.place]||''):'',s:2},
+      {v:l.fallDuration||'',s:2},
+      {v:l.moodFall?(FALL_RU[l.moodFall]||''):'',s:2},
+      {v:l.wbEnd?(WBEND_RU[l.wbEnd]||''):'',s:2},
+      {v:l.moodWake?(WAKE_RU[l.moodWake]||''):'',s:2},
+      {v:l.wbComment||'',s:2}
+    ]);
   });
-  const ws1=XLSX.utils.aoa_to_sheet([hdr,...dataRows]);
-  // Ширины столбцов
-  ws1['!cols']=[
-    {wch:12},{wch:8},{wch:10},{wch:8},{wch:8},{wch:14},
-    {wch:14},{wch:12},{wch:14},{wch:18},{wch:12},{wch:30}
-  ];
-  XLSX.utils.book_append_sheet(wb,ws1,'Дневник снов');
 
-  // ── Лист 2: Сводка по дням с ВБ ──
-  const hdr2=['Дата','День','Подъём','Кол-во снов','ВБ1','ВБ2','ВБ3','ВБ4','ВБ5',
-    'Сумм. дн. сон (мин)','Ночной сон (мин)','Итого сна (мин)',
-    'Норма ДС мин ('+fmtClock(n.ds[0])+'–'+fmtClock(n.ds[1])+')',
-    'Норма НС мин ('+fmtClock(n.ns[0])+'–'+fmtClock(n.ns[1])+')',
-    'Норма итого мин','Пробуждений ночью','Ночное гуляние'];
-  const summaryRows=[];
+  // ── ЛИСТ 2: Сводка по дням (компактно, как в примере) ──
+  const hdr2=['Дата','День','Подъём','Снов','ВБ1','ВБ2','ВБ3','ВБ4','ВБ5',
+    'Дневной сон','Ночной сон','Итого сна','Норма сна','Настроение дня'];
+  const rows2=[hdr2.map(h=>({v:h,s:1}))];
   const today=new Date();
+  const dayMoodScores=[]; // для статистики динамики
   for(let d=6;d>=0;d--){
     const date=new Date(today);date.setDate(date.getDate()-d);date.setHours(0,0,0,0);
     const dstr=dateStr(date.getTime());
@@ -1422,7 +1906,6 @@ async function exportHistory(){
     let ds_min=0;dl.forEach(l=>ds_min+=(l.end-l.start)/60000);
     const ns_min=nl?((nl.end-nl.start)/60000):0;
 
-    // ВБ между снами
     const wbs=[];
     dl.forEach((l,i)=>{
       let wbBef=0;
@@ -1432,31 +1915,96 @@ async function exportHistory(){
     });
     while(wbs.length<5)wbs.push('');
 
-    // Ночные данные (только сегодня)
-    const nwCount=d===0&&nightData?nightData.count:'';
-    const nwWalk=d===0&&nightData?(nightData.walk==='yes'?'Да':'Нет'):'';
+    // Настроение дня — % хороших пробуждений
+    let goodCount=0,totalCount=0;
+    dl.forEach(l=>{if(l.moodWake){totalCount++;if(l.moodWake==='happy')goodCount++;}});
+    const moodPct=totalCount?Math.round(goodCount/totalCount*100):null;
+    if(moodPct!==null)dayMoodScores.push({date:dstr,pct:moodPct});
 
-    summaryRows.push([
-      dstr, DAYS[date.getDay()],
-      wake?fmtT(wake):'', dl.length,
-      ...wbs.slice(0,5),
-      Math.round(ds_min), Math.round(ns_min), Math.round(ds_min+ns_min),
-      n.ds[0]+' – '+n.ds[1], n.ns[0]+' – '+n.ns[1], n.tot[0]+' – '+n.tot[1],
-      nwCount, nwWalk
+    const moodLabel=moodPct===null?'—':moodPct>=70?'😊 Хорошее ('+moodPct+'%)':moodPct>=40?'😐 Среднее ('+moodPct+'%)':'😢 Беспокойное ('+moodPct+'%)';
+
+    rows2.push([
+      {v:dstr,s:2},{v:DAYS[date.getDay()],s:2},
+      {v:wake?fmtT(wake):'',s:2},{v:dl.length,s:2},
+      {v:wbs[0],s:2},{v:wbs[1],s:2},{v:wbs[2],s:2},{v:wbs[3],s:2},{v:wbs[4],s:2},
+      {v:ds_min?fmtClock(ds_min):'',s:2},
+      {v:ns_min?fmtClock(ns_min):'',s:2},
+      {v:(ds_min+ns_min)?fmtClock(ds_min+ns_min):'',s:2},
+      {v:fmtClock(n.ds[0])+'–'+fmtClock(n.ds[1])+' дн / '+fmtClock(n.ns[0])+'–'+fmtClock(n.ns[1])+' ночь',s:2},
+      {v:moodLabel,s:2}
     ]);
   }
-  const ws2=XLSX.utils.aoa_to_sheet([hdr2,...summaryRows]);
-  ws2['!cols']=[
-    {wch:12},{wch:6},{wch:8},{wch:8},
-    {wch:7},{wch:7},{wch:7},{wch:7},{wch:7},
-    {wch:14},{wch:14},{wch:14},
-    {wch:16},{wch:16},{wch:12},
-    {wch:14},{wch:14}
-  ];
-  XLSX.utils.book_append_sheet(wb,ws2,'Сводка по дням');
 
-  // Сохраняем с правильными настройками
-  XLSX.writeFile(wb_xl,'sonny_дневник.xlsx',{bookType:'xlsx',type:'binary'});
+  // ── ЛИСТ 3: Статистика и динамика ──
+  const rows3=[];
+  rows3.push([{v:'СТАТИСТИКА ЗА 7 ДНЕЙ',s:1},{v:'',s:1},{v:'',s:1}]);
+  rows3.push(['','','']);
+
+  // Норма сна
+  rows3.push([{v:'Норма сна для возраста',s:3},'','']);
+  rows3.push(['Дневной сон, норма', fmtClock(n.ds[0])+' – '+fmtClock(n.ds[1]), '']);
+  rows3.push(['Ночной сон, норма', fmtClock(n.ns[0])+' – '+fmtClock(n.ns[1]), '']);
+  rows3.push(['Итого сна, норма', fmtClock(n.tot[0])+' – '+fmtClock(n.tot[1]), '']);
+  rows3.push(['Время бодрствования, норма', fmtClock(n.wb[0])+' – '+fmtClock(n.wb[1]), '']);
+  rows3.push(['','','']);
+
+  // Средние факт. показатели за 7 дней
+  let avgDs=0,avgNs=0,cntDays=0;
+  for(let d=6;d>=0;d--){
+    const date=new Date(today);date.setDate(date.getDate()-d);date.setHours(0,0,0,0);
+    const dstr=dateStr(date.getTime());
+    const dl=getLogsForDate(dstr);
+    const nl=getNightForDate(dstr);
+    let ds_min=0;dl.forEach(l=>ds_min+=(l.end-l.start)/60000);
+    const ns_min=nl?((nl.end-nl.start)/60000):0;
+    if(ds_min||ns_min){avgDs+=ds_min;avgNs+=ns_min;cntDays++;}
+  }
+  avgDs=cntDays?avgDs/cntDays:0;avgNs=cntDays?avgNs/cntDays:0;
+
+  rows3.push([{v:'Фактически за неделю (среднее)',s:3},'','']);
+  rows3.push(['Дневной сон, в среднем', fmtClock(avgDs), avgDs>=n.ds[0]?'✅ В норме':avgDs>0?'⚠️ Ниже нормы':'—']);
+  rows3.push(['Ночной сон, в среднем', fmtClock(avgNs), avgNs>=n.ns[0]?'✅ В норме':avgNs>0?'⚠️ Ниже нормы':'—']);
+  rows3.push(['','','']);
+
+  // Динамика настроения — главная фича
+  rows3.push([{v:'🌟 ДИНАМИКА НАСТРОЕНИЯ',s:3},'','']);
+  if(dayMoodScores.length>=2){
+    const firstHalf=dayMoodScores.slice(0,Math.ceil(dayMoodScores.length/2));
+    const secondHalf=dayMoodScores.slice(Math.ceil(dayMoodScores.length/2));
+    const avgFirst=firstHalf.reduce((a,x)=>a+x.pct,0)/firstHalf.length;
+    const avgSecond=secondHalf.reduce((a,x)=>a+x.pct,0)/secondHalf.length;
+    const diff=Math.round(avgSecond-avgFirst);
+    rows3.push(['Начало недели (% хороших пробуждений)', Math.round(avgFirst)+'%', '']);
+    rows3.push(['Конец недели (% хороших пробуждений)', Math.round(avgSecond)+'%', '']);
+    if(diff>5)rows3.push(['Изменение', '+'+diff+'%', '🌟 Улучшение! Малыш просыпается лучше']);
+    else if(diff<-5)rows3.push(['Изменение', diff+'%', '⚠️ Стало хуже — проверьте архитектуру дня']);
+    else rows3.push(['Изменение', (diff>0?'+':'')+diff+'%', 'Стабильно']);
+  }else{
+    rows3.push(['Недостаточно данных для динамики (нужно 2+ дня с отметками настроения)','','']);
+  }
+  rows3.push(['','','']);
+
+  // Обратная связь по дням (eodFeedback)
+  rows3.push([{v:'Обратная связь мамы (рекомендации Сонни)',s:3},'','']);
+  const fbDates=Object.keys(eodFeedback||{}).sort();
+  if(fbDates.length){
+    fbDates.forEach(dt=>{
+      rows3.push([dt, eodFeedback[dt]==='yes'?'👍 Полезно':'🤔 Не очень', '']);
+    });
+  }else{
+    rows3.push(['Пока нет отметок','','']);
+  }
+
+  const rows3styled=rows3.map(r=>r.map(c=>typeof c==='object'?c:{v:c,s:2}));
+
+  const sheets=[
+    {name:'Дневник снов',rows:rows1,colWidths:[12,7,9,8,8,12,10,11,13,16,13,28]},
+    {name:'Сводка по дням',rows:rows2,colWidths:[12,6,8,6,7,7,7,7,7,11,11,11,24,18]},
+    {name:'Статистика',rows:rows3styled,colWidths:[32,16,28]}
+  ];
+
+  const bytes=buildXlsx(sheets);
+  downloadBytes(bytes,'sonny_дневник.xlsx');
 }
 
 /* ══ ПЛАН ══ */
@@ -1603,8 +2151,39 @@ function pWake(el){
   h.textContent=text;h.className='mhint show';
 }
 function saveWake(){
-  if(pendingWakeId){const l=logs.find(x=>x.id===pendingWakeId);if(l){l.moodWake=selWake;const c=document.getElementById('wb-cmt').value.trim();if(c)l.wbComment=c;}saveData();}
+  if(pendingWakeId){
+    const l=logs.find(x=>x.id===pendingWakeId);
+    if(l){
+      l.moodWake=selWake;
+      const c=document.getElementById('wb-cmt').value.trim();
+      if(c)l.wbComment=c;
+      // Калибровка только для дневных снов — ночь не часть ВБ-сетки дня
+      if(l.type!=='night')runCalibrationForLog(l);
+    }
+    saveData();
+  }
   pendingWakeId=null;document.getElementById('wakeOv').classList.remove('show');renderAll();
+}
+
+/* Определяет позицию сна в дне (first/mid/last) и прогоняет его через
+   diagnoseNap + updateCalibration. Вызывается сразу после того как
+   зафиксировано пробуждение — момент полноты данных А+Б+В+Г по этому сну. */
+function runCalibrationForLog(l){
+  const n=norm();
+  const dstr=dateStr(l.start);
+  const dayLogs=getLogsForDate(dstr).filter(x=>x.end&&x.type!=='night').sort((a,b)=>a.start-b.start);
+  const idx=dayLogs.findIndex(x=>x.id===l.id);
+  if(idx===-1)return;
+  const position=idx===0?'first':(idx===dayLogs.length-1?'last':'mid');
+
+  const wake=getMorningForDate(dstr);
+  let wbBefore=0;
+  if(idx===0&&wake)wbBefore=(l.start-wake)/60000;
+  else if(idx>0)wbBefore=(l.start-dayLogs[idx-1].end)/60000;
+
+  const diagnosis=diagnoseNap(l,wbBefore,n.wb);
+  if(!calibState)initCalibState(n);
+  updateCalibration(position,diagnosis,n);
 }
 
 /* ══ НОЧНЫЕ ПРОБУЖДЕНИЯ ══ */
