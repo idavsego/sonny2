@@ -493,7 +493,7 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
       <h2>Нормы сна</h2>
       <table class="normtable" id="normtab"></table>
       <div class="notice tip" style="margin-top:8px;font-size:11.5px">📌 ВБ — максимум после снов >1 ч. После коротких (<60 мин) — ВБ сокращается на 5–15%. До 3 мес — всё ВБ спокойно.</div>
-      <div class="notice info" style="margin-top:6px;font-size:11.5px">🔄 Сонни считает по нормам таблицы, пока данных мало. Когда накопится 4+ снов с хорошим засыпанием за последние 5 дней — переходит на фактическое ВБ именно вашего малыша (медиана по первому/среднему/последнему снам). Нормы — ориентир, не цель.</div>
+      <div class="notice info" style="margin-top:6px;font-size:11.5px">🔄 Сонни ориентируется на нормы по возрасту, а после 3 дней дневника — на реальную ситуацию и привычки именно вашего малыша.</div>
     </div>
   </div>
 
@@ -558,7 +558,7 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
       <div id="fall-dur-hint" style="display:none;margin-top:5px;font-size:11.5px;border-radius:9px;padding:7px 10px;line-height:1.4"></div>
     </div>
     <div class="field">
-      <label>Где уснул? <span style="font-weight:400;color:var(--muted)">(необязательно)</span></label>
+      <label>Где уснул? <span style="font-weight:400;color:var(--muted)">(можно выбрать несколько)</span></label>
       <div class="place-row" id="place-row">
         <div class="pp" data-v="crib" onclick="pPlace(this)">🛏️ Кроватка</div>
         <div class="pp" data-v="cosleep" onclick="pPlace(this)">🛌 Совм. сон</div>
@@ -567,6 +567,8 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
         <div class="pp" data-v="self" onclick="pPlace(this)">⭐ Сам</div>
         <div class="pp" data-v="stroller" onclick="pPlace(this)">🚗 Коляска</div>
       </div>
+      <input id="place-cmt" type="text" placeholder="Комментарий (необязательно) — например, началось на руках, потом переложили в кроватку"
+        style="margin-top:9px;width:100%;border:1px solid var(--line);border-radius:11px;padding:9px 11px;font-size:14px;font-family:'Rubik';background:var(--bg);color:var(--ink);outline:none;box-sizing:border-box">
     </div>
     <div class="mhint" id="fall-hint"></div>
     <button class="btn btn-m" style="margin-top:13px" onclick="saveFall()">Сохранить</button>
@@ -836,8 +838,7 @@ function sheetXml(rows, colWidths) {
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<sheetData>${rowsXml}</sheetData>
-${colsXml}
+${colsXml}<sheetData>${rowsXml}</sheetData>
 </worksheet>`;
 }
 
@@ -897,6 +898,7 @@ ${sheets.map((s, i) => `<Relationship Id="rId${i+1}" Type="http://schemas.openxm
 <xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="center"/></xf>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 </cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>` });
 
   sheets.forEach((s, i) => {
@@ -927,9 +929,9 @@ const NORMS=[
   {m:[0,0],lb:'до 1 мес',wb:[40,50],naps:[3,8],nl:[15,180],ds:[360,840],ns:[300,600],tot:[960,1080]},
   {m:[1,1],lb:'1 мес',wb:[50,60],naps:[4,6],nl:[40,120],ds:[420,540],ns:[480,540],tot:[900,1080]},
   {m:[2,2],lb:'2 мес',wb:[60,80],naps:[4,5],nl:[40,120],ds:[360,540],ns:[540,600],tot:[900,1020]},
-  {m:[3,3],lb:'3 мес',wb:[80,100],naps:[4,4],nl:[40,120],ds:[280,360],ns:[600,660],tot:[840,1020]},
-  {m:[4,4],lb:'4 мес',wb:[90,120],naps:[4,4],nl:[40,120],ds:[240,320],ns:[600,660],tot:[840,960]},
-  {m:[5,5],lb:'5 мес',wb:[100,130],naps:[4,4],nl:[30,140],ds:[200,300],ns:[600,720],tot:[840,960]},
+  {m:[3,3],lb:'3 мес',wb:[80,100],naps:[4,5],nl:[40,120],ds:[280,360],ns:[600,660],tot:[840,1020]},
+  {m:[4,4],lb:'4 мес',wb:[90,120],naps:[4,5],nl:[40,120],ds:[240,320],ns:[600,660],tot:[840,960]},
+  {m:[5,5],lb:'5 мес',wb:[100,130],naps:[3,4],nl:[30,140],ds:[200,300],ns:[600,720],tot:[840,960]},
   {m:[6,6],lb:'6 мес — переход на 3 сна',wb:[110,150],naps:[3,4],nl:[40,140],ds:[180,280],ns:[600,720],tot:[780,960]},
   {m:[7,7],lb:'7 мес',wb:[135,165],naps:[3,3],nl:[60,140],ds:[160,260],ns:[600,720],tot:[780,900]},
   {m:[8,8],lb:'8 мес — переход на 2 сна',wb:[150,210],naps:[2,3],nl:[60,140],ds:[120,240],ns:[600,720],tot:[780,900]},
@@ -960,7 +962,7 @@ const REGRESSIONS=[
 /* ══ СОСТОЯНИЕ ══ */
 let profile=null, logs=[], sleeping=null, morningWake=null, chatHistory=[];
 let nightData=null, pendingWakeId=null;
-let selFall=null, selWbEnd=null, selWake=null, selPlace=null;
+let selFall=null, selWbEnd=null, selWake=null, selPlaces=[];
 let selNwCnt=null, selNwWalk=null, timeCtx=null;
 let editingLogId=null;
 let eodFeedback={}; // {date: 'yes'|'no'}
@@ -1088,17 +1090,55 @@ function wbLast(n){
   return wbLastTable(n);
 }
 
+/* ══ ВЫБОР КОЛИЧЕСТВА СНОВ (по методологии ТЗ, раздел 2.6 шаг 7) ══
+   "Делим ВБ на отрезки: ВБ ÷ (кол-во снов + 1) = среднее ВБ. Проверяем:
+   влезает ли на меньшее кол-во снов?"
+   Пример из кейса Гриши: при 4 снах среднее ВБ = 1:38 — НИЖЕ табличного
+   диапазона для возраста (1:45-2:00) → "рано" переходить на 4 сна,
+   остаёмся на 5 (где среднее по серединным отрезкам = 1:22, в норме).
+   Идём от МЕНЬШЕГО количества снов (naps[1], больше снов) к БОЛЬШЕМУ
+   ВБ (naps[0], меньше снов) и берём первый вариант, где среднее ВБ
+   попадает в табличный диапазон [wb0,wb1] или хотя бы не ниже wb0. */
+function chooseNapsCount(n){
+  const targetDaySleep=(n.ds[0]+n.ds[1])/2;
+  const targetNightSleep=(n.ns[0]+n.ns[1])/2;
+  const dayBudgetMin=24*60-targetNightSleep-targetDaySleep; // суточное бодрствование
+
+  // Перебираем от большего количества снов (короче ВБ) к меньшему (длиннее ВБ) —
+  // п.т. методология "сначала проверяем, не рано ли переходить на меньшее число"
+  const candidates=[];
+  for(let naps=n.naps[1];naps>=n.naps[0];naps--){
+    const avgWB=dayBudgetMin/(naps+1);
+    candidates.push({naps,avgWB});
+  }
+  // Ищем первый (с наибольшим количеством снов) вариант, где среднее ВБ
+  // не ниже нижней границы табличного диапазона — это и есть проверка
+  // "не рано ли" из кейса Гриши (1:38 < 1:45 → рано, пробуем больше снов).
+  // Допуск ~10%: переходные периоды (скачки развития, индивидуальные особенности)
+  // могут давать ВБ чуть ниже табличного минимума при том, что это всё ещё
+  // комфортный вариант для конкретного малыша — не отсекаем из-за пары минут.
+  const tolerance=n.wb[0]*0.1;
+  for(const c of candidates){
+    if(c.avgWB>=n.wb[0]-tolerance)return{naps:c.naps,avgWB:c.avgWB,reason:null};
+  }
+  // Если совсем ничего не подходит (нетипичный случай) — берём вариант
+  // с минимальным количеством снов из допустимого диапазона
+  const fallback=candidates[candidates.length-1];
+  return{naps:fallback.naps,avgWB:fallback.avgWB,reason:'Ни один вариант не уложился точно в табличный диапазон ВБ — взяли крайний по возрасту'};
+}
+
 /* ══ УРОВЕНЬ 2 — СУТОЧНАЯ БАЛАНСИРОВКА ══
    Берём калиброванные/табличные ВБ по позициям и проверяем: сходится ли
    их сумма (+ суммарная длительность снов) в дневную норму сна (n.tot)?
    Если расчётный день выходит за пределы нормы — мягко растягиваем/сжимаем
    ВСЕ отрезки пропорционально, а не дёргаем один. Это и есть "раскидать
    все ВБ равномерно, чтобы где-то посередине оно сошлось".
-   Возвращает: {first,mid,last,scaleApplied,reason} — скорректированные ВБ на день. */
+   Возвращает: {first,mid,last,naps,scaleApplied,reason} — скорректированные ВБ на день. */
 function getBalancedDayPlan(n){
-  const naps=n.naps[1]; // целевое количество снов (план дня)
+  const napsChoice=chooseNapsCount(n);
+  const naps=napsChoice.naps; // фактически подходящее количество снов, не всегда n.naps[1]
   const rawFirst=wbFirst(n), rawMid=wbMid(n), rawLast=wbLast(n);
-  if(naps<=1)return{first:rawFirst,mid:rawMid,last:rawLast,scaleApplied:1,reason:null};
+  if(naps<=1)return{first:rawFirst,mid:rawMid,last:rawLast,naps,scaleApplied:1,reason:napsChoice.reason};
 
   // Считаем примерную сумму ВБ за день при текущих анкорах:
   // 1 первое + (naps-2) средних + 1 последнее (упрощённая модель равных средних)
@@ -1111,19 +1151,20 @@ function getBalancedDayPlan(n){
   const targetNightSleep=(n.ns[0]+n.ns[1])/2;
   const dayBudgetMin=24*60-targetNightSleep-targetDaySleep; // сколько минут в сутках остаётся на ВБ
 
-  if(dayBudgetMin<=0||sumWB<=0)return{first:rawFirst,mid:rawMid,last:rawLast,scaleApplied:1,reason:null};
+  if(dayBudgetMin<=0||sumWB<=0)return{first:rawFirst,mid:rawMid,last:rawLast,naps,scaleApplied:1,reason:napsChoice.reason};
 
   const scale=dayBudgetMin/sumWB;
   // Применяем мягкую коррекцию только если расхождение значимое (>15%),
   // иначе не трогаем — мелкие отклонения это нормальный шум
   if(Math.abs(scale-1)<0.15){
-    return{first:rawFirst,mid:rawMid,last:rawLast,scaleApplied:1,reason:null};
+    return{first:rawFirst,mid:rawMid,last:rawLast,naps,scaleApplied:1,reason:napsChoice.reason};
   }
   const clampedScale=Math.max(0.8,Math.min(1.25,scale)); // не растягиваем больше чем на 25%
   return{
     first:Math.round(rawFirst*clampedScale),
     mid:Math.round(rawMid*clampedScale),
     last:Math.round(rawLast*clampedScale),
+    naps,
     scaleApplied:clampedScale,
     reason:clampedScale<1?'Сумма ВБ за день превышала норму сна — слегка сократили':'Сумма ВБ за день была меньше нормы сна — слегка увеличили'
   };
@@ -1135,6 +1176,23 @@ function isNightSleep(log){
   const h=new Date(log.start).getHours();return h>=17||h<2;
 }
 function isCurrentNight(){if(!sleeping)return false;const h=new Date(sleeping.start).getHours();return h>=17||h<7;}
+function isStaleSheeping(){
+  // Защита от зависшего "малыш спит": если прошло аномально много времени без
+  // завершения — забыли нажать "проснулся", это не настоящий длинный сон.
+  if(!sleeping)return false;
+  const hoursAsleep=(Date.now()-sleeping.start)/3600000;
+  if(hoursAsleep>14)return true; // абсолютный потолок — дольше не спит никто
+  // Дополнительная проверка: если уже разгар дня (после 10 утра), а "сон" длится
+  // дольше 3.5 часов — для дневного сна это нереалистично долго, скорее всего
+  // отметили "засыпает" и забыли завершить, а не правда спит непрерывно
+  const nowHour=new Date().getHours();
+  if(nowHour>=10&&nowHour<18&&hoursAsleep>3.5)return true;
+  return false;
+}
+function discardStaleSleep(){
+  sleeping=null;saveData();renderAll();
+  showNotice('Отметку убрали. Можно начать заново.','info');
+}
 function todayDayLogs(){
   return logs.filter(l=>{
     if(!l.end)return isToday(l.start)&&!isCurrentNight();
@@ -1210,7 +1268,7 @@ function startSleep(ts){
   const t=todayDayLogs();
   const last=[...t].reverse().find(l=>l.end&&(ts-l.end)<20*60*1000);
   if(last){
-    sleeping={start:last.start,moodFall:last.moodFall,wbEnd:last.wbEnd,fallDuration:last.fallDuration,place:last.place};
+    sleeping={start:last.start,moodFall:last.moodFall,wbEnd:last.wbEnd,fallDuration:last.fallDuration,places:last.places||(last.place?[last.place]:[]),placeComment:last.placeComment};
     logs=logs.filter(l=>l.id!==last.id);
     showNotice('Пауза <20 мин — объединил в один сон.','info');
   }else sleeping={start:ts};
@@ -1222,7 +1280,7 @@ function endSleep(ts){
   const isNight=isNightSleep({start:sleeping.start,end:ts});
   const entry={id:Date.now(),start:sleeping.start,end:ts,type:isNight?'night':'day',
     moodFall:sleeping.moodFall||null,wbEnd:sleeping.wbEnd||null,
-    fallDuration:sleeping.fallDuration||null,place:sleeping.place||null,
+    fallDuration:sleeping.fallDuration||null,places:sleeping.places||[],placeComment:sleeping.placeComment||null,
     moodWake:null,wbComment:null};
   logs.push(entry);sleeping=null;
   saveData();renderAll();
@@ -1269,9 +1327,10 @@ function dayTotals(){
 function nextWindow(){
   const n=norm();const t=todayDayLogs();
   const lastWake=t.length?t[t.length-1].end:morningWake;if(!lastWake)return null;
-  const isFirst=t.length===0,napsLeft=n.naps[0]-t.length;
-  // Уровень 2: сначала получаем сбалансированный план дня (сумма ВБ ↔ норма сна за сутки)
+  // Уровень 2: сначала получаем сбалансированный план дня (сумма ВБ ↔ норма сна за сутки,
+  // включая фактически подходящее количество снов — может отличаться от naps[0] таблицы)
   const balanced=getBalancedDayPlan(n);
+  const isFirst=t.length===0,napsLeft=balanced.naps-t.length;
   let wb;
   if(isFirst)wb=balanced.first;
   else if(napsLeft<=0)wb=balanced.last;
@@ -1282,68 +1341,88 @@ function nextWindow(){
     if(ld<60)wb=Math.round(wb*(1-Math.min(0.15,Math.max(0.05,(60-ld)/200))));
   }
   const putdown=lastWake+wb*60000;
-  return{calm:putdown-20*60000,ritual:putdown-12*60000,putdown,wb,isNight:napsLeft<=0,balanceNote:balanced.reason};
+  return{calm:putdown-20*60000,ritual:putdown-12*60000,putdown,wb,isNight:napsLeft<=0,balanceNote:balanced.reason,napsToday:balanced.naps};
 }
 
 /* ══ ДИАГНОЗ ВБ ДЛЯ КАЛИБРОВКИ (источник: длина ВБ или наполнение СБ/АБ) ══
    Возвращает: {verdict:'недогул'|'норма'|'перегул', source:'length'|'content'|null, adjustMin:число}
    source='length'   → меняем длину ВБ (увеличить/сократить)
    source='content'  → ВБ норм по длине, но СБ начато поздно/мало — меняем наполнение, не длину
-   Это разделение — ключевое отличие от голой статистики: не всякий перегул лечится сокращением ВБ. */
+
+   ЛОГИКА СТРОГО ПО ИСХОДНОМУ ТЗ (раздел "Параметр А: Как уснул малыш"):
+   - Легко, спокойно, без капризов → отлично, не "перегул"
+   - Капризничал, был беспокойный (ДО и при засыпании) → перевозбуждение/перегул
+     (недостаточное замедление и СБ, либо поздно пошли укладывать)
+   - Сопротивлялся укладыванию/протест → смотрим настроение ДО (параметр Б):
+       если ДО было хорошее  → НЕДОГУЛ (малыш не был готов спать, отсюда протест)
+       если ДО было не очень → ПЕРЕГУЛ
+   Параметр В (длительность засыпания) — НЕ самостоятельный вывод, а уточняющий
+   сигнал, который усиливает или ослабляет вывод из А+Б. "До 5 мин" в ТЗ — это
+   "есть ВЕРОЯТНОСТЬ" сильной усталости, не жёсткое "перегул, сократить ВБ". */
 function diagnoseNap(l, wbBeforeMin, normRange){
   if(!l.end)return null;
-  const dur=(l.end-l.start)/60000;
-  const isShort=dur<60;
   const mf=l.moodFall, wbEnd=l.wbEnd, fd=l.fallDuration, mw=l.moodWake;
 
-  // Помогает отличить "ВБ объективно длинное" от "ВБ нормальное, но СБ не хватило":
-  // если wbBeforeMin известно и оно НЕ превышает верхнюю границу нормы больше чем на ~10%,
-  // то даже при протесте дело вероятнее в наполнении, а не в длине.
-  // Без normRange (старые вызовы) — поведение как раньше, source='length'.
+  // wbWithinNorm: было ли ВБ перед этим сном в пределах нормы (не выше верхней границы на 10%+)
+  // Помогает отличить "ВБ объективно длинное" (source=length) от "ВБ нормальное,
+  // но СБ не хватило" (source=content). Без normRange — не определяем источник по этому признаку.
   const wbWithinNorm=normRange&&wbBeforeMin?(wbBeforeMin<=normRange[1]*1.1):null;
 
-  // Протест/плач — сигнал перегула. Но источник зависит от того, не было ли
-  // ВБ при этом в пределах нормы — тогда дело в нехватке СБ, не в длине ВБ.
-  if(mf==='crying'){
+  // ПАРАМЕТР А: "Легко, спокойно, без капризов" — это просто хорошо.
+  // Не делаем вывод "перегул" только по факту спокойного засыпания.
+  if(mf==='calm'){
+    // Параметр В усиливает интерпретацию, но НЕ создаёт вывод сам по себе:
+    // "до 5 мин" по ТЗ — это лишь "вероятность" сильной усталости, нужно подтверждение
+    // через настроение до сна (параметр Б) или после (параметр Г).
+    if(fd&&fd<5){
+      if(wbEnd==='fussy'||wbEnd==='tired'){
+        // Спокойно уснул быстро, но до этого был беспокойным/усталым — похоже на перегул,
+        // но это может быть и нехватка СБ, не длины ВБ
+        if(wbWithinNorm===true)return{verdict:'перегул',source:'content',adjustMin:0,confidence:'medium',note:'ВБ в пределах нормы — вероятно не хватило спокойного бодрствования, а не длина ВБ велика'};
+        return{verdict:'перегул',source:'length',adjustMin:-15,confidence:'medium'};
+      }
+      // Быстрое спокойное засыпание без признаков беспокойства до сна — просто хорошо,
+      // не делаем вывод о перегуле без подтверждения по другим параметрам
+      return{verdict:'норма',source:null,adjustMin:0,confidence:'low'};
+    }
+    // Спокойное засыпание 5–20 мин — по ТЗ это "ВБ оптимальное"
+    if(fd&&fd<=20){
+      if(mw==='fussy'){
+        // Поспал спокойно, уложился вовремя, но проснулся капризным — причина не в ВБ
+        return{verdict:'норма',source:null,adjustMin:0,confidence:'low',note:'Сон и засыпание в норме — капризное пробуждение скорее не связано с ВБ'};
+      }
+      return{verdict:'норма',source:null,adjustMin:0,confidence:'high'};
+    }
+    // Спокойно, но до этого был беспокойный/усталый — перевозбуждение, чаще наполнение
+    if(wbEnd==='fussy'||wbEnd==='tired'){
+      if(wbWithinNorm===true)return{verdict:'перегул',source:'content',adjustMin:0,confidence:'medium',note:'Раньше начать СБ, снизить нагрузку в АБ — длину ВБ не трогаем'};
+      return{verdict:'перегул',source:'length',adjustMin:-10,confidence:'medium'};
+    }
+  }
+
+  // ПАРАМЕТР А: "Капризничал, был беспокойный" (при засыпании) —
+  // перевозбуждение/перегул. Источник зависит от того, было ли ВБ в пределах нормы.
+  if(mf==='fussy'){
     if(wbWithinNorm===true){
-      return{verdict:'перегул',source:'content',adjustMin:0,confidence:'high',
-        note:'ВБ в пределах нормы, но протест — скорее всего не хватило спокойного бодрствования. Начните СБ раньше, не сокращайте ВБ.'};
+      return{verdict:'перегул',source:'content',adjustMin:0,confidence:'medium',note:'ВБ в пределах нормы — не хватило замедления и СБ перед сном, не сокращаем ВБ'};
+    }
+    return{verdict:'перегул',source:'length',adjustMin:-10,confidence:'medium',note:'Недостаточное замедление и СБ, либо поздно пошли укладывать — превышено ВБ'};
+  }
+
+  // ПАРАМЕТР А: "Сопротивлялся укладыванию/протест" — смотрим настроение ДО (параметр Б).
+  // Это и есть строка, где раньше была ошибка: протест ≠ автоматически перегул.
+  if(mf==='crying'){
+    if(wbEnd==='active'||wbEnd===null||wbEnd===undefined){
+      // До сна было хорошее настроение (бодрый/спокойный) — малыш не был готов спать,
+      // протест от того, что рано положили — НЕДОГУЛ, не перегул
+      return{verdict:'недогул',source:'length',adjustMin:+10,confidence:'medium',note:'Протест при засыпании, но до этого настроение было хорошее — недогул, малыш не был готов спать'};
+    }
+    // До сна настроение было не очень (капризный/усталый) — перегул
+    if(wbWithinNorm===true){
+      return{verdict:'перегул',source:'content',adjustMin:0,confidence:'high',note:'ВБ в пределах нормы, но протест — не хватило спокойного бодрствования. Начните СБ раньше, не сокращайте ВБ.'};
     }
     return{verdict:'перегул',source:'length',adjustMin:-15,confidence:'high'};
   }
-
-  // Спокойное засыпание, быстрое (<5 мин) — обычно сильный перегул, ребёнок "вырубился"
-  if(mf==='calm'&&fd&&fd<5)return{verdict:'перегул',source:'length',adjustMin:-15,confidence:'high'};
-
-  // Капризничал, но ДО сна был бодрый (не усталый, не перевозбуждённый) — недогул
-  if((mf==='fussy')&&wbEnd==='active')return{verdict:'недогул',source:'length',adjustMin:+10,confidence:'medium'};
-
-  // Спокойно уснул, но до этого капризничал — это перевозбуждение от наполнения,
-  // не от длины ВБ. ДЛИНУ НЕ МЕНЯЕМ — чиним наполнение СБ.
-  if(mf==='calm'&&wbEnd==='fussy')return{verdict:'перегул',source:'content',adjustMin:0,confidence:'medium',note:'Раньше начать СБ, снизить нагрузку в АБ'};
-
-  // Капризничал + был беспокойным/усталым до сна — перегул, но проверяем источник:
-  // если ВБ близко к норме — дело в наполнении (СБ началось поздно), не в длине
-  if(mf==='fussy'&&(wbEnd==='fussy'||wbEnd==='tired')){
-    if(wbWithinNorm===true){
-      return{verdict:'перегул',source:'content',adjustMin:0,confidence:'medium',note:'СБ началось поздно — раньше замедление, не сокращать ВБ'};
-    }
-    return{verdict:'перегул',source:'content',adjustMin:-5,confidence:'medium',note:'СБ началось поздно — раньше замедление, не сокращать ВБ резко'};
-  }
-
-  // Долгое укладывание (>35 мин) без чёткого протеста — двойственный сигнал
-  if(fd&&fd>35){
-    if(mf==='calm')return{verdict:'недогул',source:'length',adjustMin:+15,confidence:'low'};
-    return{verdict:'перегул',source:'length',adjustMin:-15,confidence:'low'};
-  }
-
-  // Спокойное засыпание 5-20 мин + хорошее пробуждение — это и есть "попали"
-  if(mf==='calm'&&fd&&fd<=20&&(mw==='happy'||mw==='neutral')){
-    return{verdict:'норма',source:null,adjustMin:0,confidence:'high'};
-  }
-
-  // Капризное пробуждение после короткого сна — перегул, но может быть и регресс
-  if(mw==='fussy'&&isShort)return{verdict:'перегул',source:'length',adjustMin:-10,confidence:'low',note:'Возможен регресс — проверить возраст'};
 
   return null; // недостаточно данных для диагноза
 }
@@ -1390,9 +1469,18 @@ function initCalibState(n){
     last:{anchor:wbLastTable(n),hits:0,misses:0,confirmed:false,history:[]},
   };
 }
-// Чистые табличные функции (без обращения к факту) — нужны как стартовая точка калибровки
-function wbMidTable(n){return Math.round((n.wb[0]+n.wb[1])/2);}
-function wbFirstTable(n){return Math.max(n.wb[0],Math.round(wbMidTable(n)*0.85));}
+/* Чистые табличные функции (без обращения к факту) — нужны как стартовая точка калибровки.
+   ВАЖНО: строятся от avgWB выбранного количества снов (chooseNapsCount), а не от середины
+   общего табличного диапазона n.wb — иначе при выборе большего числа снов (например 5 вместо 4)
+   стартовые анкоры всё равно считались бы как для меньшего числа, что давало завышенные ВБ.
+   Эта логика пока опирается на простую формулу ВБ÷(снов+1) и сверку с табличным диапазоном —
+   сама Мария отметила, что это предварительная гипотеза, не точное правило, бывают переходные
+   периоды (скачки развития), где комфортное ВБ определяется по факту, не только по формуле. */
+function wbMidTable(n){
+  const choice=chooseNapsCount(n);
+  return Math.round(choice.avgWB);
+}
+function wbFirstTable(n){return Math.max(20,Math.round(wbMidTable(n)*0.85));}
 function wbLastTable(n){return Math.round(wbMidTable(n)*1.12);}
 
 /* ══ АЛГОРИТМ А+Б+В+Г ══ */
@@ -1547,7 +1635,14 @@ function renderState(){
   const wrap=document.getElementById('mainbtns');
   const em=profile?(profile.entryMode||'morning'):'morning';
 
-  if(sleeping&&isCurrentNight()){
+  if(sleeping&&isStaleSheeping()){
+    card.className='state';
+    lbl.textContent='Нужно уточнить';
+    hint.innerHTML='Малыш отмечен спящим с <b>'+fmtT(sleeping.start)+'</b> — это очень давно, похоже забыли отметить пробуждение. Что было на самом деле?';
+    wins.innerHTML='';
+    wrap.innerHTML='<button class="btn btn-w" onclick="askTime(\'wake\')">☀️ Малыш проснулся (укажу время)</button>'+
+      '<button class="btn btn-g" onclick="discardStaleSleep()">Это ошибка — малыш не спал</button>';
+  }else if(sleeping&&isCurrentNight()){
     card.className='state nightsl';makeStars();
     lbl.textContent='Ночной сон';
     hint.textContent='Тс-с… Сонни ждёт утра.';
@@ -1581,9 +1676,6 @@ function renderState(){
     card.className='state';lbl.textContent='Бодрствование';
     const w=nextWindow();
     const t2=todayDayLogs();
-    // Источник данных — РЕАЛЬНАЯ проверка через ту же функцию что использует расчёт
-    const factual=getFactualWB();
-    const dataSrc=factual?('по вашему малышу (по '+factual.sampleSize+' снам за 5 дн.)'):'по нормам таблицы';
     if(w){
       const refTs=t2.length?t2[t2.length-1].end:morningWake;
       const nowMin=(Date.now()-refTs)/60000;
@@ -1595,8 +1687,7 @@ function renderState(){
         '🌙 Укладывание в <b>'+fmtT(w.putdown)+'</b>'+
         (isPast?' <span style="color:var(--star);font-weight:600">← пора!</span>':
           isUrgent?' <span style="color:var(--star)">(через '+remaining+' мин)</span>':
-          ' (через '+remaining+' мин)')+
-        '<br><span style="font-size:11px;opacity:.65">Сонни считает '+dataSrc+'</span>';
+          ' (через '+remaining+' мин)');
       wins.innerHTML=
         '<div class="wp"><div class="wt">Укладывание</div><div class="wv">'+fmtT(w.putdown)+'</div></div>'+
         '<div class="wp"><div class="wt">Макс. ВБ</div><div class="wv">'+fmtClock(w.wb)+'</div></div>';
@@ -1638,7 +1729,7 @@ function renderFeed(){
   const feed=document.getElementById('feed');let html='';
   if(morningWake){
     const am=profile&&profile.autoMorning;
-    const nwTxt=nightData?(' · '+(nightData.count==='0'?'без пробужд.':nightData.count+' пробужд.')+(nightData.walk==='yes'?' + гуляние':'')):'' ;
+    const nwTxt=(nightData&&nightData.count)?(' · '+(nightData.count==='0'?'без пробужд.':nightData.count+' пробужд.')+(nightData.walk==='yes'?' + гуляние':'')):'' ;
     html+='<div class="fi"><div class="ficon fi-w">☀️</div><div class="fmain">'+
       '<div class="ft">Утренний подъём'+(am?' <span class="tag" style="color:var(--accent);border-color:var(--accent)">авто</span>':'')+
       ' <span style="font-size:10.5px;color:var(--accent);cursor:pointer" onclick="askTime(\'morning\')">✏️</span></div>'+
@@ -1653,16 +1744,18 @@ function renderFeed(){
     if(!l.end)return;
     const dur=(l.end-l.start)/60000,short=dur<60;
     const fe=l.moodFall?FE[l.moodFall]:'',we=l.moodWake?WE[l.moodWake]:'';
-    const pl=l.place?(PL[l.place]+' '+PLN[l.place]):'';
+    const placesArr=l.places||(l.place?[l.place]:[]);
+    const pl=placesArr.length?placesArr.map(p=>PL[p]+' '+PLN[p]).join(', '):'';
     const fd=l.fallDuration,fdOk=fd&&fd<=20;
     const durTxt=fd&&fd>20?', укл. '+fd+' мин ⚠️':'';
     const cmt=l.wbComment?('<div class="fcmt">💬 '+l.wbComment+'</div>'):'';
+    const placeCmt=l.placeComment?('<div class="fcmt">📍 '+l.placeComment+'</div>'):'';
     const stag=short?'<span class="tag warn">кор.</span>':'';
     const dok=fdOk?'<span class="tag ok">'+fd+' мин</span>':'';
     html+='<div class="fi"><div class="ficon fi-d">🌙</div><div class="fmain">'+
       '<div class="ft"><span>'+(i+1)+'-й сон · '+fmtDur(dur)+'</span>'+stag+dok+'</div>'+
       '<div class="fs">'+fmtT(l.start)+' – '+fmtT(l.end)+durTxt+(pl?' · '+pl:'')+'</div>'+
-      cmt+'</div><div class="fbadge">'+fe+' '+we+'</div></div>';
+      cmt+placeCmt+'</div><div class="fbadge">'+fe+' '+we+'</div></div>';
   });
   feed.innerHTML=html||'<div class="sub">Нажмите кнопку когда малыш засыпает — Сонни запустит таймер.</div>';
 
@@ -1708,6 +1801,7 @@ function renderCalib(){
   if(calib.transCheck&&calib.transCheck.ready)html+='<div class="notice tip" style="margin-top:7px">🔄 '+calib.transCheck.msg+'</div>';
   if(calib.summary)html+='<div class="notice '+calib.summary.type+'" style="margin-top:7px">'+calib.summary.text+'</div>';
   if(calib.oks>0&&calib.alerts===0)html+='<div class="notice praise" style="margin-top:7px">🌟 Молодец! Настроение малыша сегодня хорошее.</div>';
+  if(calib.alerts>=2)html+='<button class="btn btn-g" style="margin-top:9px;font-size:13px" onclick="switchTab(\'chat\',document.querySelector(\'.tabbtn:nth-child(4)\'))">💬 Спросить Сонни — что делать?</button>';
   box.innerHTML=html+'</div>';
 }
 
@@ -1793,13 +1887,16 @@ function renderHistory(){
         html+='<div class="hist-wb" style="color:'+(wbOk?'var(--muted)':'var(--rose)')+'">'+
           '⏱ ВБ '+fmtDur(Math.max(0,wbBefore))+'</div>';
       }
+      const placesArrH=l.places||(l.place?[l.place]:[]);
+      const placesTxtH=placesArrH.length?placesArrH.map(p=>PLN[p]||p).join(', '):'';
       html+='<div class="hist-item"><div class="ficon fi-d" style="width:28px;height:28px;font-size:14px;flex-shrink:0">🌙</div>'+
         '<div class="fmain"><div class="ft">'+(i+1)+'-й сон · '+fmtDur(dur)+
         (dur<60?' <span class="tag warn">кор.</span>':'')+' '+fe+we+'</div>'+
         '<div class="fs">'+fmtT(l.start)+' – '+fmtT(l.end)+
         (l.fallDuration?' · укл.'+l.fallDuration+'мин':'')+
-        (l.place?' · '+(PLN[l.place]||''):'')+'</div>'+
+        (placesTxtH?' · '+placesTxtH:'')+'</div>'+
         (l.wbComment?'<div class="fcmt">💬 '+l.wbComment+'</div>':'')+
+        (l.placeComment?'<div class="fcmt">📍 '+l.placeComment+'</div>':'')+
         '</div><span class="edit-link" onclick="editLog('+l.id+')">✏️</span></div>';
     });
     // ВБ после последнего сна (только сегодня)
@@ -1878,11 +1975,14 @@ async function exportHistory(){
   sorted.forEach(l=>{
     const d=new Date(l.start);
     const dur=Math.round((l.end-l.start)/60000);
+    const placesArr=l.places||(l.place?[l.place]:[]); // обратная совместимость со старыми записями (одиночное place)
+    const placesStr=placesArr.map(p=>PLACE_RU_EX[p]||p).join(', ');
+    const placeNote=l.placeComment?(placesStr?' — '+l.placeComment:l.placeComment):'';
     rows1.push([
       {v:dateStr(l.start),s:2},{v:DAYS[d.getDay()],s:2},
       {v:isNightSleep(l)?'Ночной':'Дневной',s:2},
       {v:fmtT(l.start),s:2},{v:fmtT(l.end),s:2},{v:fmtDur(dur),s:2},
-      {v:l.place?(PLACE_RU_EX[l.place]||''):'',s:2},
+      {v:placesStr+placeNote,s:2},
       {v:l.fallDuration||'',s:2},
       {v:l.moodFall?(FALL_RU[l.moodFall]||''):'',s:2},
       {v:l.wbEnd?(WBEND_RU[l.wbEnd]||''):'',s:2},
@@ -2092,7 +2192,7 @@ function toggleArch(){const h=document.getElementById('arch-hdr'),b=document.get
 /* ══ МОДАЛКА УКЛАДЫВАНИЯ ══ */
 const FALL_H={calm:'Уснул спокойно — ВБ скорее всего подходит.',fussy:'Капризы при укладывании. Укажите настроение ДО сна (параметр Б) — это важно для точного вывода.',crying:'Протест и плач — признак перегула. Сократите ВБ на 15 мин.'};
 function openFall(){
-  selFall=null;selWbEnd=null;selPlace=null;
+  selFall=null;selWbEnd=null;selPlaces=[];
   document.querySelectorAll('#fall-row .m3').forEach(m=>m.className='m3');
   document.querySelectorAll('#wbend-row .m3').forEach(m=>m.className='m3');
   document.querySelectorAll('#place-row .pp').forEach(p=>p.classList.remove('sel'));
@@ -2100,6 +2200,7 @@ function openFall(){
   document.getElementById('fall-dur').value='';
   document.getElementById('fall-dur-hint').style.display='none';
   document.getElementById('wbend-wrap').classList.add('hidden');
+  const pc=document.getElementById('place-cmt');if(pc)pc.value='';
   document.getElementById('fallOv').classList.add('show');
 }
 function closeFall(){document.getElementById('fallOv').classList.remove('show');renderAll();}
@@ -2125,9 +2226,21 @@ function onFallDur(){
   else{text='>35 мин — сигнал. Капризы → сократить ВБ. Спокойный → увеличить ВБ.';bg='var(--warn)';color='var(--wi)';}
   box.textContent=text;box.style.background=bg;box.style.color=color;box.style.display='block';
 }
-function pPlace(el){selPlace=el.dataset.v;document.querySelectorAll('#place-row .pp').forEach(p=>p.classList.remove('sel'));el.classList.add('sel');}
+function pPlace(el){
+  const v=el.dataset.v;
+  const idx=selPlaces.indexOf(v);
+  if(idx>=0){selPlaces.splice(idx,1);el.classList.remove('sel');}
+  else{selPlaces.push(v);el.classList.add('sel');}
+}
 function saveFall(){
-  if(sleeping){sleeping.moodFall=selFall;sleeping.wbEnd=selWbEnd;sleeping.fallDuration=parseInt(document.getElementById('fall-dur').value)||null;sleeping.place=selPlace;}
+  if(sleeping){
+    sleeping.moodFall=selFall;sleeping.wbEnd=selWbEnd;
+    sleeping.fallDuration=parseInt(document.getElementById('fall-dur').value)||null;
+    sleeping.places=selPlaces.slice(); // массив — может быть несколько мест
+    const pc=document.getElementById('place-cmt');
+    const pcVal=pc?pc.value.trim():'';
+    if(pcVal)sleeping.placeComment=pcVal;
+  }
   saveData();document.getElementById('fallOv').classList.remove('show');renderAll();
 }
 
@@ -2197,7 +2310,13 @@ function updateNwHint(){
   box.textContent=text;box.style.display=show?'block':'none';
 }
 function saveNight(){
-  nightData={count:selNwCnt,walk:selNwWalk,ts:Date.now()};
+  if(!selNwCnt){
+    const hint=document.getElementById('nw-hint');
+    hint.textContent='Выберите, сколько раз просыпался ночью';
+    hint.style.background='var(--warn)';hint.style.color='var(--wi)';hint.style.display='block';
+    return;
+  }
+  nightData={count:selNwCnt,walk:selNwWalk||'no',ts:Date.now()};
   selNwCnt=null;selNwWalk=null;
   document.querySelectorAll('#nw-cnt .pp,#nw-walk .pp').forEach(p=>p.classList.remove('sel'));
   document.getElementById('nw-hint').style.display='none';
@@ -2256,7 +2375,7 @@ function buildPrompt(){
   const t=todayDayLogs(),night=todayNightLog();const d=dayTotals();
   const reg=REGRESSIONS.find(r=>a>=r.m[0]&&a<=r.m[1]);
   let diary=morningWake?'Подъём '+fmtT(morningWake)+'. ':'Утро не отмечено. ';
-  if(nightData)diary+='Ночь: '+(nightData.count==='0'?'без пробужд.':nightData.count+' пробужд.')+(nightData.walk==='yes'?'+гуляние>30мин':'')+'. ';
+  if(nightData&&nightData.count)diary+='Ночь: '+(nightData.count==='0'?'без пробужд.':nightData.count+' пробужд.')+(nightData.walk==='yes'?'+гуляние>30мин':'')+'. ';
   if(night&&night.end)diary+='НС: '+fmtT(night.start)+'–'+fmtT(night.end)+' ('+fmtDur((night.end-night.start)/60000)+'). ';
   const FT={calm:'спокойно',fussy:'капризничал',crying:'протест/плач'};
   const WT={tired:'показывал усталость',fussy:'капризный',active:'бодрый'};
