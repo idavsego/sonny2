@@ -974,11 +974,8 @@ let selFall=null, selWbEnd=null, selWake=null, selPlaces=[];
 let selNwCnt=null, selNwWalk=null, timeCtx=null;
 let editingLogId=null;
 let eodFeedback={}; // {date: 'yes'|'no'}
-/* calibState — опорные значения ВБ по позиции дня (first/mid/last), которые
-   складываются из табличной нормы + истории попаданий/непопаданий.
-   Это память между днями — отдельная от сырых logs.
-   Структура: {first:{anchor:мин,hits:0,misses:0,lastAdjust:мин,history:[...]},mid:{...},last:{...}} */
 let calibState=null;
+let serverAnalysis=null; // результат /api/analysis/today с сервера
 
 /* ══ ХРАНИЛИЩЕ ══ */
 const LS={
@@ -1081,6 +1078,15 @@ async function saveProfile(){
   if(useAPI()&&profile){
     try{await apiPost('/api/profile',{name:profile.name,birth_date:profile.birthDate,due_date:profile.dueDate||null,term_choice:profile.termChoice||'yes'});}catch(e){}
   }
+}
+
+async function fetchServerAnalysis(){
+  if(!useAPI())return;
+  try{
+    const r=await apiGet('/api/analysis/today');
+    serverAnalysis=r;
+    renderState();renderFlags();
+  }catch(e){serverAnalysis=null;}
 }
 
 /* ══ УТИЛИТЫ ══ */
@@ -1403,6 +1409,7 @@ async function endSleep(ts){
   logs.push(entry);sleeping=null;
   saveData();renderAll();
   pendingWakeId=entry.id;openWake(dur,isNight);
+  fetchServerAnalysis();
 }
 async function setMorning(ts){
   const t=todayDayLogs();
@@ -1860,7 +1867,13 @@ function renderState(){
     wrap.innerHTML='<button class="btn btn-m" onclick="askTime(\'morning\')">☀️ Малыш проснулся утром</button>';
   }else{
     card.className='state';lbl.textContent='Бодрствование';
-    const w=nextWindow();
+    const sw=serverAnalysis&&serverAnalysis.window;
+    const w=sw?{
+      calm:sw.calm?new Date(sw.calm).getTime():null,
+      ritual:sw.ritual?new Date(sw.ritual).getTime():null,
+      putdown:sw.putdown?new Date(sw.putdown).getTime():null,
+      wb:sw.wb,isNight:sw.isNight,napsToday:sw.napsToday
+    }:nextWindow();
     const t2=todayDayLogs();
     if(w){
       const refTs=t2.length?t2[t2.length-1].end:morningWake;
@@ -2678,6 +2691,8 @@ async function sendChat(){
   await loadAll();
   if(profile)document.getElementById('onboard').classList.add('hidden');
   renderAll();
+  // Загружаем серверный анализ фоново — обновит экран когда придёт ответ
+  if(profile)fetchServerAnalysis();
 })();
 </script>
 </body>
