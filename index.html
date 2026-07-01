@@ -1004,6 +1004,7 @@ async function confirmReset(){
   try{localStorage.removeItem('sonny:profile');localStorage.removeItem('sonny:data8');}catch(e){}
   location.reload();
 }
+async function saveData(){
   try{LS.set('sonny:data8',{logs,sleeping,morningWake,nightData,eodFeedback,calibState});}catch(e){}
 }
 async function saveProfile(){try{LS.set('sonny:profile',profile);}catch(e){}}
