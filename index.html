@@ -496,6 +496,12 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
       <div class="notice tip" style="margin-top:8px;font-size:11.5px">📌 ВБ — максимум после снов >1 ч. После коротких (<60 мин) — ВБ сокращается на 5–15%. До 3 мес — всё ВБ спокойно.</div>
       <div class="notice info" style="margin-top:6px;font-size:11.5px">🔄 Сонни ориентируется на нормы по возрасту, а после 3 дней дневника — на реальную ситуацию и привычки именно вашего малыша.</div>
     </div>
+    <div class="card" style="margin-top:4px">
+      <h2>⚙️ Данные приложения</h2>
+      <p class="sub" style="margin-bottom:12px">Для тестирования или если хочешь начать с чистого листа — сбрось все данные. Профиль малыша и дневник сна будут удалены.</p>
+      <button class="btn btn-g" style="color:var(--rose);font-size:13px;border:1px solid #f0b8c0;border-radius:13px;padding:11px" onclick="confirmReset()">🗑 Сбросить все данные</button>
+    </div>
+
   </div>
 
   <!-- ЧАТ -->
@@ -993,7 +999,11 @@ async function loadAll(){
     }
   }catch(e){}
 }
-async function saveData(){
+async function confirmReset(){
+  if(!confirm('Сбросить все данные? Профиль малыша и дневник сна будут удалены. Это действие нельзя отменить.'))return;
+  try{localStorage.removeItem('sonny:profile');localStorage.removeItem('sonny:data8');}catch(e){}
+  location.reload();
+}
   try{LS.set('sonny:data8',{logs,sleeping,morningWake,nightData,eodFeedback,calibState});}catch(e){}
 }
 async function saveProfile(){try{LS.set('sonny:profile',profile);}catch(e){}}
