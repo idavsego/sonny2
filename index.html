@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Сонни</title>
+<title>Сонни v12</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;700&family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -387,7 +387,7 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
       <div class="arch-btn" onclick="toggleArchDetail('regime')">
         <div class="ab-ico">📅</div>
         <div class="ab-title">Правила режима</div>
-        <div class="ab-sub">Как выстроить стабильный режим</div>
+        <div class="ab-sub">Как выстроить стабильный режим + правило мостика</div>
       </div>
     </div>
 
@@ -398,6 +398,7 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
       <div class="arch-step"><div class="as-num">1</div><div><b>Начинаем с дневника сна 3–5 дней</b><br>Записываем время подъёма, каждый сон, настроение. Ищем закономерности: в какое время малыш чаще просыпается бодрым? Какое ВБ даёт спокойное укладывание?</div></div>
       <div class="arch-step"><div class="as-num">2</div><div><b>Фиксируем время подъёма</b><br>Стабильный подъём — фундамент режима. Наблюдаем 3–5 дней, находим среднее. Мягко помогаем просыпаться в это время (открываем шторы).</div></div>
       <div class="arch-step"><div class="as-num">3</div><div><b>С 4–5 мес — фиксируем 1-й и 2-й сон</b><br>1-й сон: 9:00–10:00. 2-й сон: 12:00–14:00. 3-й сон — не фиксируем, управляем через уход в ночь.</div></div>
+      <div class="arch-step"><div class="as-num">4</div><div><b>Переход на меньше снов — правило мостика</b><br>Если все предыдущие сны дня были длинными (>1 ч) → пробуем новое кол-во снов. Если хотя бы один короткий → добавляем мостик: 30–45 мин, не продлеваем. Возраст: 4→3 сна с 4–5 мес, 3→2 с 6–7 мес, 2→1 с 12 мес.</div></div>
       <div class="arch-step"><div class="as-num">4</div><div><b>Нагрузки — в первую половину дня</b><br>Врачи, прививки, гости, ТЦ, бассейн — до обеда. Вечером нервная система не справляется с новыми впечатлениями.</div></div>
       <div class="arch-step"><div class="as-num">5</div><div><b>Уход в ночь — не позже 21:00</b><br>Ценность часов до полуночи выше. Правило 12 часов: от подъёма до ночи не менее 12 ч. Ночь — минимум 10 ч.</div></div>
       <div class="notice tip" style="margin-top:9px;font-size:11.5px">💬 Нужен персональный режим? Спроси у Сонни во вкладке «Консультант» — скажи возраст малыша и время подъёма.</div>
@@ -1557,8 +1558,26 @@ function analyzeCalib(){
   return{perNap,summary,transCheck,alerts,oks,lengthIssues,contentIssues};
 }
 
+/* ══ ПРАВИЛО МОСТИКА — проверяем готовность к переходу на меньше снов ══
+   Стоп-сигналы по возрасту:
+   4→3 сна: не раньше 4–5 мес
+   3→2 сна: не раньше 6–7 мес
+   2→1 сна: не раньше 12 мес
+   Математика: суточное ВБ ÷ (новое кол-во снов + 1) должно укладываться в норму ВБ по возрасту.
+   Мостик: если предыдущие сны дня были длинными (>1ч) → план по новому кол-ву снов.
+   Если хотя бы один короткий → добавляем мостик (+1 короткий сон 30–45 мин, не продлевать). */
 function checkTransition(t,n){
+  const a=ageMonths();
   if(n.naps[0]<=1||logs.length<10)return null;
+
+  // Стоп-сигнал по возрасту — для перехода 2→1 нужно ≥12 мес
+  const targetNaps=n.naps[0]; // минимальное кол-во снов для возраста
+  if(targetNaps===1&&a<12)return null; // не предлагаем до 12 мес
+  if(targetNaps===2&&a<6)return null;  // не предлагаем 3→2 до 6 мес
+  if(targetNaps===3&&a<4)return null;  // не предлагаем 4→3 до 4 мес
+  if(targetNaps===4&&a<3)return null;  // не предлагаем 5→4 до 3 мес
+  if(a<3)return null;                  // общий стоп: до 3 мес переходы не предлагаем вообще (ритм дня, не режим)
+
   const last3=[];
   for(let d=1;d<=4;d++){
     const ds=new Date();ds.setDate(ds.getDate()-d);ds.setHours(0,0,0,0);
@@ -1567,10 +1586,33 @@ function checkTransition(t,n){
     if(dl.length)last3.push(dl);
   }
   if(last3.length<2)return null;
+
+  // Проверяем признаки готовности: последний сон сложно уложить + до него бодрый
   let c1=0,c2=0;
-  last3.forEach(day=>{const ln=day[day.length-1];if(ln){if(ln.fallDuration&&ln.fallDuration>20)c1++;if(ln.wbEnd==='active')c2++;}});
-  if(c1>=2&&c2>=2)return{ready:true,msg:'Возможно, малыш готов перейти на '+(n.naps[0]-1)+' сна. Обсудите с Сонни.'};
-  return null;
+  last3.forEach(day=>{
+    const ln=day[day.length-1];
+    if(ln){if(ln.fallDuration&&ln.fallDuration>20)c1++;if(ln.wbEnd==='active')c2++;}
+  });
+  if(!(c1>=2&&c2>=2))return null;
+
+  // Математическая проверка: ВБ при новом кол-ве снов
+  const targetDaySleep=(n.ds[0]+n.ds[1])/2;
+  const targetNightSleep=(n.ns[0]+n.ns[1])/2;
+  const totalWB=24*60-targetNightSleep-targetDaySleep;
+  const newNaps=Math.max(0,n.naps[1]-1); // текущий максимум → уменьшаем на 1
+  const newAvgWB=totalWB/(newNaps+1);
+
+  // Если ВБ при новом кол-ве снов < нижней границы нормы — рано
+  if(newAvgWB<n.wb[0]*0.9)return{ready:false,msg:'Математически пока рано — ВБ при '+newNaps+' снах будет '+fmtClock(Math.round(newAvgWB))+', это меньше нормы ('+fmtClock(n.wb[0])+'). Спросите Сонни.'};
+
+  // Проверяем сегодняшний день — мостик нужен?
+  const todayLongNaps=t.filter(l=>l.end&&(l.end-l.start)/60000>=60).length;
+  const needBridge=t.length>0&&todayLongNaps<Math.max(1,t.length-1);
+
+  if(needBridge){
+    return{ready:true,bridge:true,msg:'Сегодня один из снов был коротким — добавьте мостик: короткий сон 30–40 мин в конце дня, не продлевать. Спросите Сонни.'};
+  }
+  return{ready:true,bridge:false,msg:'Возможно, малыш готов перейти на '+newNaps+' '+(newNaps===1?'сон':'сна')+'. Все предыдущие сны длинные — хороший день для перехода. Спросите Сонни.'};
 }
 
 function computeFlags(){
@@ -1587,6 +1629,36 @@ function computeFlags(){
     if(wh<6)flags.push({level:'alert',text:'⏰ Подъём до 6:00 — ранний подъём. Проверьте время ухода в ночь и последний дневной сон.'});
     else if(wh>=9&&a>4)flags.push({level:'tip',text:'⏰ Подъём после 9:00. Желательно мягко сдвигать к 6:00–8:00.'});
   }
+
+  // Косвенные признаки перехода на меньше снов: ночь < 10 ч несколько дней подряд
+  if(a>4&&logs.length>6){
+    const recentNights=[];
+    for(let d=1;d<=4;d++){
+      const ds=new Date();ds.setDate(ds.getDate()-d);ds.setHours(0,0,0,0);
+      const de=new Date(ds);de.setDate(de.getDate()+1);
+      const nl=logs.find(l=>isNightSleep(l)&&l.end&&l.start>=ds&&l.start<de);
+      if(nl&&nl.end)recentNights.push((nl.end-nl.start)/60000);
+    }
+    const shortNights=recentNights.filter(d=>d<600).length; // < 10 ч
+    if(shortNights>=3)flags.push({level:'tip',text:'🌙 Ночь короче 10 ч несколько дней подряд — косвенный признак того, что режим перестаёт влезать в сутки. Спросите Сонни.'});
+
+    // Подъём смещается вперёд (раньше обычного)
+    if(recentNights.length>=3){
+      const mornings=[];
+      for(let d=1;d<=4;d++){
+        const ds=new Date();ds.setDate(ds.getDate()-d);ds.setHours(0,0,0,0);
+        const de=new Date(ds);de.setDate(de.getDate()+1);
+        const nl=logs.find(l=>isNightSleep(l)&&l.end&&l.end>=ds.getTime()&&l.end<de.getTime());
+        if(nl&&nl.end)mornings.push(new Date(nl.end).getHours()*60+new Date(nl.end).getMinutes());
+      }
+      if(mornings.length>=3){
+        const avg=mornings.reduce((a,b)=>a+b,0)/mornings.length;
+        const early=mornings.filter(m=>m<avg-20).length;
+        if(early>=2)flags.push({level:'tip',text:'⏰ Подъём смещается вперёд несколько дней — возможно режим перестраивается. Спросите Сонни.'});
+      }
+    }
+  }
+
   const reg=REGRESSIONS.find(r=>a>=r.m[0]&&a<=r.m[1]);
   if(reg&&t.length>0){const short=t.filter(l=>(l.end-l.start)/60000<60).length;if(short>=2)flags.push({level:'regression',...reg});}
   const d=dayTotals();
@@ -1798,7 +1870,11 @@ function renderCalib(){
         '<div>'+r.text+(r.action?' → <span class="calib-act">'+r.action+'</span>':'')+'</div></div>';
     });
   });
-  if(calib.transCheck&&calib.transCheck.ready)html+='<div class="notice tip" style="margin-top:7px">🔄 '+calib.transCheck.msg+'</div>';
+  if(calib.transCheck){
+    if(calib.transCheck.ready&&!calib.transCheck.bridge)html+='<div class="notice tip" style="margin-top:7px">🔄 '+calib.transCheck.msg+'</div>';
+    else if(calib.transCheck.ready&&calib.transCheck.bridge)html+='<div class="notice tip" style="margin-top:7px">🌉 '+calib.transCheck.msg+'</div>';
+    else if(calib.transCheck.ready===false)html+='<div class="notice info" style="margin-top:7px">⏳ '+calib.transCheck.msg+'</div>';
+  }
   if(calib.summary)html+='<div class="notice '+calib.summary.type+'" style="margin-top:7px">'+calib.summary.text+'</div>';
   if(calib.oks>0&&calib.alerts===0)html+='<div class="notice praise" style="margin-top:7px">🌟 Молодец! Настроение малыша сегодня хорошее.</div>';
   if(calib.alerts>=2)html+='<button class="btn btn-g" style="margin-top:9px;font-size:13px" onclick="switchTab(\'chat\',document.querySelector(\'.tabbtn:nth-child(4)\'))">💬 Спросить Сонни — что делать?</button>';
@@ -2411,6 +2487,7 @@ function buildPrompt(){
 - Первое ВБ всегда короче (~15–20%). ВБ нарастает к вечеру.
 - До 3 мес — всё ВБ спокойно, режим ритмичный, подъём не фиксируем.
 - С 4 мес: считаем среднее подъёма за 4–7 дней → фиксируем. Сны по биоритмам.
+- С 5–6 мес: признаки усталости часто ложные (зевнул от скуки) — ориентируемся на ВБ по времени, не только на зевки.
 - ФОРМУЛА СНА: ВБ = Ритуал пробуждения + АБ (60%) + СБ (30-40%) + Ритуал засыпания + Укладывание.
 - АБ: физическая + эмоциональная + интеллектуальная нагрузка. Сильные нагрузки — в первую половину АБ.
 - СБ: минимум 40-50 мин, приглушить свет, убрать гаджеты, низкий голос, адресное внимание.
@@ -2420,15 +2497,25 @@ function buildPrompt(){
 - Ночное гуляние >30 мин = ВБ. Правило 12 ч: ночь не раньше 12 ч от подъёма. Ночь до 21:00.
 - Коррекция: один отрезок ВБ за раз, не более 20–30 мин изменений.
 - Если не указана длительность укладывания — считаем в норме (до 20 мин).
+- Минимальная длина ночи с 4–5 мес: 10 часов.
 
 ТАБЛИЦА А+Б+В+Г:
 - Спокойно + усталый/норм + укл.≤20мин → ВБ норма
 - Спокойно + бодрый + укл.>20мин → недогул, +10–15 мин ВБ
-- Капризил + беспокойный + → перегул, -10–15 мин ВБ + СБ
+- Капризил + беспокойный → перегул, -10–15 мин ВБ + СБ
 - Капризил + бодрый → проверяем: успокоился = недогул, нет = перевозбуждение
 - Протест/плач → перегул, -15 мин ВБ
 - Проснулся кап. + кор. сон (<60мин) → перегул/регресс, продлевать + -ВБ
 - Проснулся кап. + длинный → сонная ассоциация
+
+ПРАВИЛО МОСТИКА (переходы на меньше снов):
+- Стоп: 4→3 не раньше 4–5 мес, 3→2 не раньше 6–7 мес, 2→1 не раньше 12 мес.
+- Математика: суточное ВБ ÷ (новое кол-во снов + 1) должно укладываться в норму ВБ по возрасту.
+- День хороший (все предыдущие сны >1 ч) → можно пробовать новое кол-во снов.
+- День неполный (хотя бы один сон короткий) → добавляем мостик: короткий сон 30–45 мин, НЕ продлевать.
+- Мостик держим пока 3–5 хороших дней подряд не устоится. Потом убираем.
+- Косвенные признаки необходимости перехода: ночь короче 10 ч несколько дней, подъём смещается вперёд, последний сон не влезает в сутки.
+- Сначала режим — потом ассоциации. СЗ — только после стабильного спокойного укладывания.
 
 НОРМЫ ${a} мес (${n.lb}): ВБ ${fmtClock(n.wb[0])}–${fmtClock(n.wb[1])} (первое ~${fmtClock(wbFirst(n))}), ДС ${fmtClock(n.ds[0])}–${fmtClock(n.ds[1])}, снов ${n.naps[0]===n.naps[1]?n.naps[0]:n.naps[0]+'–'+n.naps[1]}, НС ${fmtClock(n.ns[0])}–${fmtClock(n.ns[1])}.
 РЕБЁНОК: ${profile?profile.name:'малыш'}, ${a} мес${profile&&profile.dueDate?' (скорр.)':''}.
@@ -2450,7 +2537,7 @@ async function sendChat(){
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:buildPrompt(),messages:chatHistory.slice(-12)})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:buildPrompt(),messages:chatHistory.slice(-12)})
     });
     const data=await resp.json();
     const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim()||'Не получилось ответить 💛 Попробуйте ещё раз';
