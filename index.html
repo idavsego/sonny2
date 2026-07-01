@@ -6,6 +6,7 @@
 <title>Сонни v12</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;700&family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{
   --bg:#F4F2F8;--card:#FFF;--ink:#34304A;--muted:#8B86A3;--line:#E8E4F1;
@@ -979,26 +980,94 @@ let eodFeedback={}; // {date: 'yes'|'no'}
    Структура: {first:{anchor:мин,hits:0,misses:0,lastAdjust:мин,history:[...]},mid:{...},last:{...}} */
 let calibState=null;
 
-/* ══ ХРАНИЛИЩЕ (localStorage — работает в браузере и Telegram Mini App) ══ */
+/* ══ ХРАНИЛИЩЕ ══ */
 const LS={
   get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}},
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}},
 };
+
+/* ══ API ══ */
+const API_BASE='https://sonny-backend-production.up.railway.app';
+function getInitData(){
+  try{return window.Telegram?.WebApp?.initData||'';}catch(e){return '';}
+}
+function authHeader(){
+  const d=getInitData();
+  return d?{'Authorization':'TgInitData '+d,'Content-Type':'application/json'}:{'Content-Type':'application/json'};
+}
+const useAPI=()=>!!getInitData();
+
+async function apiGet(path){
+  const r=await fetch(API_BASE+path,{headers:authHeader()});
+  if(!r.ok)throw new Error(r.status);
+  return r.json();
+}
+async function apiPost(path,body){
+  const r=await fetch(API_BASE+path,{method:'POST',headers:authHeader(),body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(r.status);
+  return r.json();
+}
+async function apiPatch(path,body){
+  const r=await fetch(API_BASE+path,{method:'PATCH',headers:authHeader(),body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(r.status);
+  return r.json();
+}
+async function apiDelete(path){
+  const r=await fetch(API_BASE+path,{method:'DELETE',headers:authHeader()});
+  if(!r.ok)throw new Error(r.status);
+  return r.json();
+}
+
 async function loadAll(){
+  if(useAPI()){
+    try{
+      const p=await apiGet('/api/profile');
+      if(p&&p.baby){
+        profile={name:p.baby.name||'Малыш',birthDate:p.baby.birth_date,dueDate:p.baby.due_date||null,termChoice:p.baby.term_choice||'yes'};
+        LS.set('sonny:profile',profile);
+      }
+      const logsData=await apiGet('/api/logs');
+      if(logsData&&logsData.logs){
+        logs=logsData.logs.map(l=>({
+          id:l.id,start:new Date(l.start_ts).getTime(),end:l.end_ts?new Date(l.end_ts).getTime():null,
+          type:l.type||'day',moodFall:l.mood_fall||null,wbEnd:l.wb_end||null,
+          fallDuration:l.fall_duration||null,places:l.places||[],placeComment:l.place_comment||null,
+          moodWake:l.mood_wake||null,wbComment:l.wb_comment||null
+        }));
+        LS.set('sonny:data8',{logs,sleeping,morningWake,nightData,eodFeedback,calibState});
+      }
+      try{
+        const mw=await apiGet('/api/logs/morning-wake?date='+todayStr());
+        if(mw&&mw.ts)morningWake=new Date(mw.ts).getTime();
+      }catch(e){}
+      try{
+        const nd=await apiGet('/api/logs/night-data?date='+todayStr());
+        if(nd&&nd.count!=null)nightData={count:nd.count,longWalk:nd.long_walk,ts:Date.now()};
+      }catch(e){}
+    }catch(e){
+      console.warn('API недоступен, используем localStorage',e);
+      loadFromLS();
+    }
+  }else{
+    loadFromLS();
+  }
+  if(morningWake&&!isToday(morningWake))morningWake=null;
+  if(sleeping&&!isToday(sleeping.start))sleeping=null;
+  if(nightData&&!isToday(nightData.ts))nightData=null;
+  if(profile&&profile.entryMode==='now'){
+    const lts=morningWake||(logs.length?Math.max(...logs.map(l=>l.start)):0);
+    if(lts&&!isToday(lts)){profile.entryMode='morning';saveProfile();}
+  }
+}
+function loadFromLS(){
   try{profile=LS.get('sonny:profile');}catch(e){profile=null;}
   try{
     const o=LS.get('sonny:data8')||{};
     logs=o.logs||[];sleeping=o.sleeping||null;morningWake=o.morningWake||null;
     nightData=o.nightData||null;eodFeedback=o.eodFeedback||{};calibState=o.calibState||null;
-    if(morningWake&&!isToday(morningWake))morningWake=null;
-    if(sleeping&&!isToday(sleeping.start))sleeping=null;
-    if(nightData&&!isToday(nightData.ts))nightData=null;
-    if(profile&&profile.entryMode==='now'){
-      const lts=morningWake||(logs.length?Math.max(...logs.map(l=>l.start)):0);
-      if(lts&&!isToday(lts)){profile.entryMode='morning';saveProfile();}
-    }
   }catch(e){}
 }
+
 async function confirmReset(){
   if(!confirm('Сбросить все данные? Профиль малыша и дневник сна будут удалены. Это действие нельзя отменить.'))return;
   try{localStorage.removeItem('sonny:profile');localStorage.removeItem('sonny:data8');}catch(e){}
@@ -1007,7 +1076,12 @@ async function confirmReset(){
 async function saveData(){
   try{LS.set('sonny:data8',{logs,sleeping,morningWake,nightData,eodFeedback,calibState});}catch(e){}
 }
-async function saveProfile(){try{LS.set('sonny:profile',profile);}catch(e){}}
+async function saveProfile(){
+  LS.set('sonny:profile',profile);
+  if(useAPI()&&profile){
+    try{await apiPost('/api/profile',{name:profile.name,birth_date:profile.birthDate,due_date:profile.dueDate||null,term_choice:profile.termChoice||'yes'});}catch(e){}
+  }
+}
 
 /* ══ УТИЛИТЫ ══ */
 const pad=n=>String(n).padStart(2,'0');
@@ -1271,7 +1345,7 @@ function evChoice(mode){
 }
 
 /* ══ ЛОГИКА СНА ══ */
-function startSleep(ts){
+async function startSleep(ts){
   if(!morningWake){
     const n=norm();const auto=ts-wbFirst(n)*60000;
     morningWake=auto;if(profile)profile.autoMorning=true;saveProfile();
@@ -1280,40 +1354,69 @@ function startSleep(ts){
   const t=todayDayLogs();
   const last=[...t].reverse().find(l=>l.end&&(ts-l.end)<20*60*1000);
   if(last){
-    sleeping={start:last.start,moodFall:last.moodFall,wbEnd:last.wbEnd,fallDuration:last.fallDuration,places:last.places||(last.place?[last.place]:[]),placeComment:last.placeComment};
+    sleeping={start:last.start,moodFall:last.moodFall,wbEnd:last.wbEnd,fallDuration:last.fallDuration,places:last.places||(last.place?[last.place]:[]),placeComment:last.placeComment,_apiId:last._apiId};
     logs=logs.filter(l=>l.id!==last.id);
+    if(useAPI()&&last._apiId){try{await apiDelete('/api/logs/'+last._apiId);}catch(e){}}
     showNotice('Пауза <20 мин — объединил в один сон.','info');
-  }else sleeping={start:ts};
+  }else{
+    sleeping={start:ts};
+    if(useAPI()){
+      try{
+        const r=await apiPost('/api/logs/start',{start_ts:new Date(ts).toISOString()});
+        if(r&&r.id)sleeping._apiId=r.id;
+      }catch(e){}
+    }
+  }
   saveData();renderAll();openFall();
 }
-function endSleep(ts){
+async function endSleep(ts){
   if(!sleeping)return;
   const dur=(ts-sleeping.start)/60000;
   const isNight=isNightSleep({start:sleeping.start,end:ts});
   const entry={id:Date.now(),start:sleeping.start,end:ts,type:isNight?'night':'day',
     moodFall:sleeping.moodFall||null,wbEnd:sleeping.wbEnd||null,
     fallDuration:sleeping.fallDuration||null,places:sleeping.places||[],placeComment:sleeping.placeComment||null,
-    moodWake:null,wbComment:null};
+    moodWake:null,wbComment:null,_apiId:sleeping._apiId||null};
+  if(useAPI()&&sleeping._apiId){
+    try{
+      await apiPost('/api/logs/'+sleeping._apiId+'/end',{
+        end_ts:new Date(ts).toISOString(),
+        mood_fall:entry.moodFall,wb_end:entry.wbEnd,
+        fall_duration:entry.fallDuration,places:entry.places,
+        place_comment:entry.placeComment
+      });
+    }catch(e){}
+  }else if(useAPI()){
+    try{
+      const r=await apiPost('/api/logs/start',{start_ts:new Date(sleeping.start).toISOString()});
+      if(r&&r.id){
+        await apiPost('/api/logs/'+r.id+'/end',{
+          end_ts:new Date(ts).toISOString(),
+          mood_fall:entry.moodFall,wb_end:entry.wbEnd,
+          fall_duration:entry.fallDuration,places:entry.places,
+          place_comment:entry.placeComment
+        });
+        entry._apiId=r.id;
+      }
+    }catch(e){}
+  }
   logs.push(entry);sleeping=null;
   saveData();renderAll();
   pendingWakeId=entry.id;openWake(dur,isNight);
 }
-function setMorning(ts){
+async function setMorning(ts){
   const t=todayDayLogs();
   const firstSleep=t.length?t[0].start:(sleeping&&!isCurrentNight()?sleeping.start:null);
   if(firstSleep&&ts>firstSleep){
     document.getElementById('time-lbl').textContent='⚠️ Подъём должен быть до '+fmtT(firstSleep)+' — раньше первого сна';
     document.getElementById('time-input').style.borderColor='var(--rose)';return;
   }
-  // Подъём не может быть в будущем
   if(ts>Date.now()){ts=Date.now();}
-  // Автоподъём: если получается раньше 4:00 — поправляем
   const h=new Date(ts).getHours();
-  if(h<4&&!profile?.autoMorning===false){
-    // Оставляем как есть — ранний подъём возможен
-  }
+  if(h<4&&!profile?.autoMorning===false){}
   if(profile)profile.autoMorning=false;saveProfile();
   morningWake=ts;saveData();renderAll();
+  if(useAPI()){try{await apiPost('/api/logs/morning-wake',{ts:new Date(ts).toISOString(),date:todayStr()});}catch(e){}}
   setTimeout(()=>document.getElementById('nightOv').classList.add('show'),600);
 }
 function dayTotals(){
@@ -2350,15 +2453,17 @@ function pWake(el){
   if(selWake==='fussy')text=wakeDur<60?'Капризное + короткий сон (<60 мин) — перегул или регресс. Продлите следующий, сократите ВБ.':'Капризничал, хотя поспал хорошо — сонная ассоциация, не ВБ.';
   h.textContent=text;h.className='mhint show';
 }
-function saveWake(){
+async function saveWake(){
   if(pendingWakeId){
     const l=logs.find(x=>x.id===pendingWakeId);
     if(l){
       l.moodWake=selWake;
       const c=document.getElementById('wb-cmt').value.trim();
       if(c)l.wbComment=c;
-      // Калибровка только для дневных снов — ночь не часть ВБ-сетки дня
       if(l.type!=='night')runCalibrationForLog(l);
+      if(useAPI()&&l._apiId){
+        try{await apiPatch('/api/logs/'+l._apiId,{mood_wake:selWake,wb_comment:l.wbComment||null});}catch(e){}
+      }
     }
     saveData();
   }
@@ -2396,7 +2501,7 @@ function updateNwHint(){
   else if(selNwCnt==='0'){text='Отличная ночь без пробуждений! 🌟';show=true;box.style.background='var(--ms)';box.style.color='#3E6E5C';}
   box.textContent=text;box.style.display=show?'block':'none';
 }
-function saveNight(){
+async function saveNight(){
   if(!selNwCnt){
     const hint=document.getElementById('nw-hint');
     hint.textContent='Выберите, сколько раз просыпался ночью';
@@ -2404,6 +2509,7 @@ function saveNight(){
     return;
   }
   nightData={count:selNwCnt,walk:selNwWalk||'no',ts:Date.now()};
+  if(useAPI()){try{await apiPost('/api/logs/night-data',{date:todayStr(),count:parseInt(selNwCnt),long_walk:selNwWalk==='yes'});}catch(e){}}
   selNwCnt=null;selNwWalk=null;
   document.querySelectorAll('#nw-cnt .pp,#nw-walk .pp').forEach(p=>p.classList.remove('sel'));
   document.getElementById('nw-hint').style.display='none';
