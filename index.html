@@ -361,7 +361,10 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
         <h2 style="margin:0">История снов</h2>
         <div class="sub">7 дней · можно редактировать</div>
       </div>
-      <button class="export-btn" onclick="exportHistory()">📊 Скачать Excel</button>
+      <div style="display:flex;gap:7px">
+        <button class="export-btn" onclick="openAddLog()" style="background:var(--accent);color:#fff;border-color:var(--accent)">+ Добавить</button>
+        <button class="export-btn" onclick="exportHistory()">📊 Excel</button>
+      </div>
     </div>
     <div id="hist-content"></div>
   </div>
@@ -655,6 +658,32 @@ h2{font-size:14.5px;font-weight:600;margin-bottom:8px}
     <button class="btn btn-m" onclick="saveEdit()">Сохранить изменения</button>
     <button class="btn" style="background:var(--warn);color:var(--wi);margin-top:7px" onclick="deleteLog()">🗑️ Удалить этот сон</button>
     <button class="btn btn-g" onclick="document.getElementById('editOv').classList.remove('show')">Отмена</button>
+  </div>
+</div>
+
+<!-- МОДАЛКА: добавить сон вручную -->
+<div class="overlay" id="addLogOv">
+  <div class="sheet">
+    <h3>Добавить сон вручную</h3>
+    <div class="sub" style="margin-bottom:13px">За последние 7 дней</div>
+    <div class="field">
+      <label>Дата</label>
+      <input type="date" id="add-date">
+    </div>
+    <div class="edit-field-row">
+      <div class="field"><label>Начало сна</label><input type="time" id="add-start"></div>
+      <div class="field"><label>Конец сна</label><input type="time" id="add-end"></div>
+    </div>
+    <div class="field">
+      <label>Тип</label>
+      <select id="add-type" style="width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 12px;font-size:15px;font-family:'Rubik';background:var(--bg);color:var(--ink);outline:none">
+        <option value="day">Дневной сон</option>
+        <option value="night">Ночной сон</option>
+      </select>
+    </div>
+    <div id="add-error" style="display:none;color:var(--wi);font-size:12.5px;margin-bottom:8px;background:var(--warn);border-radius:10px;padding:8px 11px"></div>
+    <button class="btn btn-m" onclick="saveNewLog()">Сохранить</button>
+    <button class="btn btn-g" onclick="document.getElementById('addLogOv').classList.remove('show')">Отмена</button>
   </div>
 </div>
 
@@ -1041,6 +1070,10 @@ async function loadAll(){
         const nd=await apiGet('/api/logs/night-data?date='+todayStr());
         if(nd&&nd.count!=null)nightData={count:nd.count,longWalk:nd.long_walk,ts:Date.now()};
       }catch(e){}
+      try{
+        const cs=await apiGet('/api/analysis/calib');
+        if(cs&&cs.calib_state)calibState=cs.calib_state;
+      }catch(e){}
     }catch(e){
       console.warn('API недоступен, используем localStorage',e);
       loadFromLS();
@@ -1049,7 +1082,14 @@ async function loadAll(){
     loadFromLS();
   }
   if(morningWake&&!isToday(morningWake))morningWake=null;
-  if(sleeping&&!isToday(sleeping.start))sleeping=null;
+  // Ночной сон может начаться вчера и продолжиться сегодня — не сбрасываем
+  if(sleeping&&!isToday(sleeping.start)){
+    const h=new Date(sleeping.start).getHours();
+    const isNightStart=h>=17||h<7;
+    const hoursAsleep=(Date.now()-sleeping.start)/3600000;
+    // Сбрасываем только если это точно не ночной сон ИЛИ прошло >14 часов
+    if(!isNightStart||hoursAsleep>14)sleeping=null;
+  }
   if(nightData&&!isToday(nightData.ts))nightData=null;
   if(profile&&profile.entryMode==='now'){
     const lts=morningWake||(logs.length?Math.max(...logs.map(l=>l.start)):0);
@@ -1072,6 +1112,7 @@ async function confirmReset(){
 }
 async function saveData(){
   try{LS.set('sonny:data8',{logs,sleeping,morningWake,nightData,eodFeedback,calibState});}catch(e){}
+  if(useAPI()&&calibState){try{await apiPost('/api/analysis/calib',{calib_state:calibState});}catch(e){}}
 }
 async function saveProfile(){
   LS.set('sonny:profile',profile);
@@ -1971,7 +2012,8 @@ function renderFeed(){
 
 function renderFlags(){
   const wrap=document.getElementById('flags-wrap');
-  const flags=computeFlags();if(!flags.length){wrap.innerHTML='';return;}
+  const flags=serverAnalysis?serverAnalysis.flags:computeFlags();
+  if(!flags||!flags.length){wrap.innerHTML='';return;}
   let html='';
   flags.forEach(f=>{
     if(f.level==='regression'){
@@ -1987,7 +2029,7 @@ function renderFlags(){
 
 function renderCalib(){
   const box=document.getElementById('calibbox');
-  const calib=analyzeCalib();if(!calib){box.innerHTML='';return;}
+  const calib=serverAnalysis?serverAnalysis.calib:analyzeCalib();if(!calib){box.innerHTML='';return;}
   let html='<div class="calib-box"><div class="calib-title">📊 Анализ настроения сегодня</div>';
   calib.perNap.forEach(({results})=>{
     if(!results)return;
@@ -2159,6 +2201,49 @@ function deleteLog(){
   if(editingLogId==='morning'){morningWake=null;}
   else{logs=logs.filter(x=>x.id!==editingLogId);}
   saveData();document.getElementById('editOv').classList.remove('show');renderAll();
+}
+
+/* ══ ДОБАВИТЬ СОН ВРУЧНУЮ ══ */
+function openAddLog(){
+  const today=new Date();
+  const minDate=new Date(today);minDate.setDate(minDate.getDate()-7);
+  const dateInput=document.getElementById('add-date');
+  dateInput.value=todayStr();
+  dateInput.min=minDate.toISOString().slice(0,10);
+  dateInput.max=todayStr();
+  document.getElementById('add-start').value='';
+  document.getElementById('add-end').value='';
+  document.getElementById('add-type').value='day';
+  document.getElementById('add-error').style.display='none';
+  document.getElementById('addLogOv').classList.add('show');
+}
+async function saveNewLog(){
+  const errEl=document.getElementById('add-error');
+  errEl.style.display='none';
+  const dateVal=document.getElementById('add-date').value;
+  const sv=document.getElementById('add-start').value;
+  const ev=document.getElementById('add-end').value;
+  const type=document.getElementById('add-type').value;
+  if(!dateVal||!sv||!ev){errEl.textContent='Заполните дату, начало и конец сна';errEl.style.display='block';return;}
+  const[sh,sm]=sv.split(':').map(Number);
+  const[eh,em]=ev.split(':').map(Number);
+  const startD=new Date(dateVal+'T00:00:00');startD.setHours(sh,sm,0,0);
+  const endD=new Date(dateVal+'T00:00:00');endD.setHours(eh,em,0,0);
+  // Ночной сон может заканчиваться на следующий день
+  if(endD<=startD){if(type==='night')endD.setDate(endD.getDate()+1);else{errEl.textContent='Время конца должно быть позже начала';errEl.style.display='block';return;}}
+  const dur=(endD-startD)/60000;
+  if(dur<5){errEl.textContent='Слишком короткий сон (меньше 5 минут)';errEl.style.display='block';return;}
+  const entry={id:Date.now(),start:startD.getTime(),end:endD.getTime(),type,moodFall:null,wbEnd:null,fallDuration:null,places:[],moodWake:null,wbComment:null,_apiId:null};
+  if(useAPI()){
+    try{
+      const r=await apiPost('/api/logs/start',{start_ts:startD.toISOString(),type});
+      if(r&&r.log&&r.log.id){entry._apiId=r.log.id;await apiPost('/api/logs/'+r.log.id+'/end',{end_ts:endD.toISOString(),type,duration_min:Math.round(dur)});}
+    }catch(e){}
+  }
+  logs.push(entry);
+  saveData();
+  document.getElementById('addLogOv').classList.remove('show');
+  renderAll();fetchServerAnalysis();
 }
 
 /* ══ ЭКСПОРТ EXCEL ══ */
@@ -2480,7 +2565,7 @@ async function saveWake(){
     }
     saveData();
   }
-  pendingWakeId=null;document.getElementById('wakeOv').classList.remove('show');renderAll();
+  pendingWakeId=null;document.getElementById('wakeOv').classList.remove('show');renderAll();fetchServerAnalysis();
 }
 
 /* Определяет позицию сна в дне (first/mid/last) и прогоняет его через
